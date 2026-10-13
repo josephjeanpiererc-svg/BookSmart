@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Iniciar emulador Pixel 9 Pro",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\.vscode\\start-emulator.ps1"
+      ],
+      "isBackground": false,
+      "problemMatcher": []
+    }
+  ]
+}
