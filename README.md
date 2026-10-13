@@ -8,7 +8,7 @@ Este proyecto está preparado para publicarse en GitHub Pages usando GitHub Acti
 
 ## Requisitos
 
-- Flutter 3.13.1+
+- Flutter estable reciente (con Dart 3.13.1 o superior)
 - Navegador moderno
 
 ## Ejecutar localmente
