@@ -1,6 +1,0 @@
-import 'dart:typed_data';
-
-import 'profile_image_picker_stub.dart'
-    if (dart.library.html) 'profile_image_picker_web.dart';
-
-Future<Uint8List?> pickProfileImage() => pickProfileImageImpl();
