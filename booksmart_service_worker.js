@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'booksmart-offline-v4';
+const CACHE_NAME = 'booksmart-offline-v5';
 const PRECACHE_FILES = [
   './',
   'index.html',
