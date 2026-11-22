@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../utils/app_localization.dart';
 import '../utils/platform_layout.dart';
 import '../widgets/booksmart_widgets.dart';
 import 'catalog_screen.dart';
@@ -110,12 +111,30 @@ class CartScreen extends StatelessWidget {
                             mainAxisAlignment: MainAxisAlignment.spaceAround,
                             children: [
                               _TabLabel(
-                                label: 'Leyendo',
+                                label: localizedText(
+                                  context,
+                                  'Leyendo',
+                                  'Reading',
+                                ),
                                 selected: true,
                                 scale: scale,
                               ),
-                              _TabLabel(label: 'Completados', scale: scale),
-                              _TabLabel(label: 'Pendiente', scale: scale),
+                              _TabLabel(
+                                label: localizedText(
+                                  context,
+                                  'Completados',
+                                  'Completed',
+                                ),
+                                scale: scale,
+                              ),
+                              _TabLabel(
+                                label: localizedText(
+                                  context,
+                                  'Pendiente',
+                                  'Pending',
+                                ),
+                                scale: scale,
+                              ),
                             ],
                           ),
                           Divider(
@@ -124,7 +143,11 @@ class CartScreen extends StatelessWidget {
                             height: 8 * scale,
                           ),
                           Text(
-                            'Resumen del pedido...',
+                            localizedText(
+                              context,
+                              'Resumen del pedido...',
+                              'Order summary...',
+                            ),
                             style: TextStyle(
                               fontSize: 16 * scale,
                               fontWeight: FontWeight.w700,
@@ -381,7 +404,11 @@ class _OrderTotal extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Subtotal\nDescuento VIP\nTOTAL',
+                  localizedText(
+                    context,
+                    'Subtotal\nDescuento VIP\nTOTAL',
+                    'Subtotal\nVIP discount\nTOTAL',
+                  ),
                   style: TextStyle(
                     fontSize: 13 * scale,
                     fontWeight: FontWeight.w700,
@@ -414,7 +441,7 @@ class _OrderTotal extends StatelessWidget {
                 ),
               ),
               child: Text(
-                'Finaliza compra',
+                localizedText(context, 'Finaliza compra', 'Checkout'),
                 style: TextStyle(
                   fontSize: 12 * scale,
                   fontWeight: FontWeight.w700,
@@ -458,8 +485,19 @@ class _CartNavigation extends StatelessWidget {
             Icons.person,
           ];
     final labels = paidPlan
-        ? const ['Inicio', 'Catalogo', 'Favoritos', 'Completados', 'Perfil']
-        : const ['Inicio', 'Catalogo', 'Mi Biblioteca', 'Perfil'];
+        ? [
+            localizedText(context, 'Inicio', 'Home'),
+            localizedText(context, 'Catalogo', 'Catalog'),
+            localizedText(context, 'Favoritos', 'Favorites'),
+            localizedText(context, 'Completados', 'Completed'),
+            localizedText(context, 'Perfil', 'Profile'),
+          ]
+        : [
+            localizedText(context, 'Inicio', 'Home'),
+            localizedText(context, 'Catalogo', 'Catalog'),
+            localizedText(context, 'Mi Biblioteca', 'My Library'),
+            localizedText(context, 'Perfil', 'Profile'),
+          ];
     return Container(
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: Color(0xFF638DB1), width: 4)),

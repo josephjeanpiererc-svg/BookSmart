@@ -1,8 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../utils/app_localization.dart';
 import '../utils/platform_layout.dart';
 import '../widgets/booksmart_widgets.dart';
+import '../widgets/book_details_sheet.dart';
+import '../widgets/navigation/app_sidebar.dart';
 import 'catalog_screen.dart';
 import 'library_screen.dart';
 import 'profile_screen.dart';
@@ -12,10 +15,12 @@ class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
     this.displayName = 'Usuario',
+    this.userId,
     this.paidPlan = false,
   });
 
   final String displayName;
+  final String? userId;
   final bool paidPlan;
 
   @override
@@ -23,9 +28,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedTab = 0;
   bool _showFloatingButton = true;
   bool _sideMenuOpen = true;
+  String get _accountId => widget.userId ?? widget.displayName;
 
   final _books = const [
     (
@@ -96,32 +101,64 @@ class _HomeScreenState extends State<HomeScreen> {
     return List.generate(7, (index) => _books[(start + index) % _books.length]);
   }
 
-  void _toggleSideMenu(bool open) {
-    if (_sideMenuOpen != open) {
-      setState(() => _sideMenuOpen = open);
-    }
-  }
-
-  void _handleSideMenuDragUpdate(DragUpdateDetails details) {
-    if (!isPhoneLayout(MediaQuery.sizeOf(context).width)) {
+  void _openBookDetails(String homeTitle, double scale) {
+    final catalogTitle = CatalogScreen.catalogTitleForHomeBook(homeTitle);
+    if (catalogTitle == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            localizedText(
+              context,
+              'No hay información disponible para este libro.',
+              'No information is available for this book.',
+            ),
+          ),
+        ),
+      );
       return;
     }
 
-    final delta = details.primaryDelta ?? 0;
-    if (delta > 0 && !_sideMenuOpen) {
-      _toggleSideMenu(true);
-    } else if (delta < 0 && _sideMenuOpen) {
-      _toggleSideMenu(false);
-    }
-  }
+    final book = CatalogScreen.detailsForTitle(catalogTitle);
+    if (book == null) return;
 
-  void _handleSideMenuDragEnd(DragEndDetails details) {
-    final velocity = details.primaryVelocity ?? 0;
-    if (velocity > 180) {
-      _toggleSideMenu(true);
-    } else if (velocity < -180) {
-      _toggleSideMenu(false);
-    }
+    BookDetailsSheet.show(
+      context: context,
+      book: book,
+      imagePath: CatalogScreen.imagePathForTitle(catalogTitle),
+      qrAssetPath: CatalogScreen.qrPathForTitle(catalogTitle),
+      scale: scale,
+      status: CatalogScreen.statusForTitle(catalogTitle, _accountId),
+      isFavorite: CatalogScreen.favoriteBookTitlesFor(_accountId)
+          .contains(catalogTitle),
+      isOwned: CatalogScreen.ownedBookTitlesFor(_accountId)
+          .contains(catalogTitle),
+      onStatusChanged: (status) {
+        setState(
+          () => CatalogScreen.setBookStatus(catalogTitle, status, _accountId),
+        );
+      },
+      onFavoriteChanged: (isFavorite) {
+        setState(
+          () => CatalogScreen.setFavorite(catalogTitle, isFavorite, _accountId),
+        );
+      },
+      onAddToLibrary: () {
+        CatalogScreen.ownedBookTitlesFor(_accountId).add(catalogTitle);
+        CatalogScreen.setBookStatus(
+          catalogTitle,
+          BookReadingStatus.reading,
+          _accountId,
+        );
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${localizedText(context, 'Ya está en tu posesión:', 'Already in your library:')} $catalogTitle',
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -138,12 +175,27 @@ class _HomeScreenState extends State<HomeScreen> {
         final scale = useFullScreen
             ? (width / 600).clamp(0.82, 1.0)
             : (frameWidth / 375).clamp(0.68, 1.1);
-        final phoneRailOpenWidth = 92.0 * scale;
-        final phoneRailClosedWidth = 56.0 * scale;
-        final contentPaddingLeft = isPhone
-            ? 14 * scale +
-                  (_sideMenuOpen ? phoneRailOpenWidth : phoneRailClosedWidth)
-            : 14 * scale + (_sideMenuOpen ? 112 * scale : 48 * scale);
+        final sidebarScale = AppSidebar.scaleFor(width);
+        final sidebarWidth = AppSidebar.widthFor(
+          scale: sidebarScale,
+          isPhone: isPhone,
+          isOpen: _sideMenuOpen,
+        );
+        final contentPaddingLeft = 14 * scale + sidebarWidth;
+        final availableContentWidth = width - contentPaddingLeft - 16 * scale;
+        final homeContentWidth = availableContentWidth
+            .clamp(0.0, 700.0)
+            .toDouble();
+        final homeContentLeft =
+            contentPaddingLeft + (availableContentWidth - homeContentWidth) / 2;
+        final showDesktopNews = kIsWeb && !isPhone && width >= 1000;
+        final leftNewsWidth = (homeContentLeft - sidebarWidth - 8 * scale)
+            .clamp(0.0, 205 * scale)
+            .toDouble();
+        final rightNewsWidth =
+            (width - homeContentLeft - homeContentWidth - 8 * scale)
+                .clamp(0.0, 205 * scale)
+                .toDouble();
         final readingBooks = _booksForRow(0);
         final newBooks = _booksForRow(1);
         final popularBooks = _booksForRow(2);
@@ -169,9 +221,37 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             child: Stack(
               children: [
-                if (kIsWeb && !isPhone && width >= 1000)
-                  const Positioned.fill(
-                    child: IgnorePointer(child: _NewsBackground()),
+                if (showDesktopNews && leftNewsWidth > 40 * scale)
+                  Positioned(
+                    left: sidebarWidth + 4 * scale,
+                    top: 48 * scale,
+                    bottom: 10 * scale,
+                    width: leftNewsWidth,
+                    child: const IgnorePointer(
+                      child: _HomeNewsColumn(
+                        imagePaths: [
+                          'assets/images/noticias/NoticiaProyecto001.jpg',
+                          'assets/images/noticias/NoticiaProyecto002.jpg',
+                          'assets/images/noticias/NoticiaProyecto003.jpg',
+                        ],
+                      ),
+                    ),
+                  ),
+                if (showDesktopNews && rightNewsWidth > 40 * scale)
+                  Positioned(
+                    right: 4 * scale,
+                    top: 48 * scale,
+                    bottom: 10 * scale,
+                    width: rightNewsWidth,
+                    child: const IgnorePointer(
+                      child: _HomeNewsColumn(
+                        imagePaths: [
+                          'assets/images/noticias/NoticiaProyecto004.jpg',
+                          'assets/images/noticias/NoticiaProyecto005.jpg',
+                          'assets/images/noticias/NoticiaProyecto006.jpg',
+                        ],
+                      ),
+                    ),
                   ),
                 Column(
                   children: [
@@ -197,7 +277,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                                 SizedBox(height: 12 * scale),
                                 Text(
-                                  'Continuar Leyendo',
+                                  localizedText(
+                                    context,
+                                    'Continuar Leyendo',
+                                    'Continue reading',
+                                  ),
                                   style: TextStyle(
                                     color: const Color(0xFFC2A50B),
                                     fontSize: 21 * scale,
@@ -218,12 +302,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                       color: readingBooks[index].$3,
                                       imagePath: readingBooks[index].$4,
                                       scale: scale,
+                                      onTap: () => _openBookDetails(
+                                        readingBooks[index].$1,
+                                        scale,
+                                      ),
                                     ),
                                   ),
                                 ),
                                 SizedBox(height: 8 * scale),
                                 Text(
-                                  'Novedades',
+                                  localizedText(context, 'Novedades', 'New'),
                                   style: TextStyle(
                                     color: const Color(0xFFC2A50B),
                                     fontSize: 21 * scale,
@@ -244,12 +332,20 @@ class _HomeScreenState extends State<HomeScreen> {
                                       color: newBooks[index].$3,
                                       imagePath: newBooks[index].$4,
                                       scale: scale,
+                                      onTap: () => _openBookDetails(
+                                        newBooks[index].$1,
+                                        scale,
+                                      ),
                                     ),
                                   ),
                                 ),
                                 SizedBox(height: 12 * scale),
                                 Text(
-                                  'Populares',
+                                  localizedText(
+                                    context,
+                                    'Populares',
+                                    'Popular',
+                                  ),
                                   style: TextStyle(
                                     color: const Color(0xFFC2A50B),
                                     fontSize: 21 * scale,
@@ -270,12 +366,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                       color: popularBooks[index].$3,
                                       imagePath: popularBooks[index].$4,
                                       scale: scale,
+                                      onTap: () => _openBookDetails(
+                                        popularBooks[index].$1,
+                                        scale,
+                                      ),
                                     ),
                                   ),
                                 ),
                                 SizedBox(height: 12 * scale),
                                 Text(
-                                  'Para ti',
+                                  localizedText(context, 'Para ti', 'For you'),
                                   style: TextStyle(
                                     color: const Color(0xFFC2A50B),
                                     fontSize: 21 * scale,
@@ -296,6 +396,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                       color: recommendedBooks[index].$3,
                                       imagePath: recommendedBooks[index].$4,
                                       scale: scale,
+                                      onTap: () => _openBookDetails(
+                                        recommendedBooks[index].$1,
+                                        scale,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -309,248 +413,50 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 Positioned(
                   left: 0,
-                  top: 70 * scale,
-                  bottom: 64 * scale,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onHorizontalDragUpdate: isPhone
-                        ? _handleSideMenuDragUpdate
-                        : null,
-                    onHorizontalDragEnd: isPhone
-                        ? _handleSideMenuDragEnd
-                        : null,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 220),
-                      width: isPhone
-                          ? (_sideMenuOpen
-                                ? phoneRailOpenWidth
-                                : phoneRailClosedWidth)
-                          : (_sideMenuOpen ? 130 * scale : 54 * scale),
-                      padding: EdgeInsets.fromLTRB(
-                        8 * scale,
-                        12 * scale,
-                        8 * scale,
-                        12 * scale,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFDCC9AA),
-                        border: Border.all(
-                          color: const Color(0xFF2F6C9A),
-                          width: 3 * scale,
-                        ),
-                        borderRadius: BorderRadius.only(
-                          topRight: Radius.circular(18 * scale),
-                          bottomRight: Radius.circular(18 * scale),
-                        ),
-                      ),
-                      child: isPhone
-                          ? Column(
-                              children: [
-                                if (_sideMenuOpen) ...[
-                                  _SideMenuItem(
-                                    icon: Icons.home,
-                                    label: 'Inicio',
-                                    selected: _selectedTab == 0,
-                                    scale: scale,
-                                    onTap: () => setState(() {
-                                      _selectedTab = 0;
-                                      _sideMenuOpen = true;
-                                    }),
-                                  ),
-                                  SizedBox(height: 14 * scale),
-                                  _SideMenuItem(
-                                    icon: Icons.business_center,
-                                    label: 'Catalogo',
-                                    selected: _selectedTab == 1,
-                                    scale: scale,
-                                    onTap: () {
-                                      setState(() {
-                                        _selectedTab = 1;
-                                        _sideMenuOpen = true;
-                                      });
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute<void>(
-                                          builder: (_) => CatalogScreen(
-                                            displayName: widget.displayName,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                  SizedBox(height: 14 * scale),
-                                  _SideMenuItem(
-                                    icon: Icons.menu_book,
-                                    label: 'Mi Biblioteca',
-                                    selected: _selectedTab == 2,
-                                    scale: scale,
-                                    onTap: () {
-                                      setState(() {
-                                        _selectedTab = 2;
-                                        _sideMenuOpen = true;
-                                      });
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute<void>(
-                                          builder: (_) => LibraryScreen(
-                                            displayName: widget.displayName,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                  SizedBox(height: 14 * scale),
-                                  _SideMenuItem(
-                                    icon: Icons.person,
-                                    label: 'Perfil',
-                                    selected: _selectedTab == 3,
-                                    scale: scale,
-                                    onTap: () {
-                                      setState(() {
-                                        _selectedTab = 3;
-                                        _sideMenuOpen = true;
-                                      });
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute<void>(
-                                          builder: (_) => ProfileScreen(
-                                            displayName: widget.displayName,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ],
-                                const Spacer(),
-                                IconButton(
-                                  onPressed: () => setState(
-                                    () => _sideMenuOpen = !_sideMenuOpen,
-                                  ),
-                                  icon: Icon(
-                                    _sideMenuOpen
-                                        ? Icons.chevron_left
-                                        : Icons.menu,
-                                    color: const Color(0xFF28639B),
-                                    size: 30 * scale,
-                                  ),
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: const Color(0xFFEFE4CF),
-                                    shape: const CircleBorder(),
-                                  ),
-                                ),
-                              ],
-                            )
-                          : _sideMenuOpen
-                          ? Column(
-                              children: [
-                                _SideMenuItem(
-                                  icon: Icons.home,
-                                  label: 'Inicio',
-                                  selected: _selectedTab == 0,
-                                  scale: scale,
-                                  onTap: () => setState(() {
-                                    _selectedTab = 0;
-                                    _sideMenuOpen = true;
-                                  }),
-                                ),
-                                SizedBox(height: 14 * scale),
-                                _SideMenuItem(
-                                  icon: Icons.business_center,
-                                  label: 'Catalogo',
-                                  selected: _selectedTab == 1,
-                                  scale: scale,
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedTab = 1;
-                                      _sideMenuOpen = true;
-                                    });
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute<void>(
-                                        builder: (_) => CatalogScreen(
-                                          displayName: widget.displayName,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                                SizedBox(height: 14 * scale),
-                                _SideMenuItem(
-                                  icon: Icons.menu_book,
-                                  label: 'Mi Biblioteca',
-                                  selected: _selectedTab == 2,
-                                  scale: scale,
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedTab = 2;
-                                      _sideMenuOpen = true;
-                                    });
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute<void>(
-                                        builder: (_) => LibraryScreen(
-                                          displayName: widget.displayName,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                                SizedBox(height: 14 * scale),
-                                _SideMenuItem(
-                                  icon: Icons.person,
-                                  label: 'Perfil',
-                                  selected: _selectedTab == 3,
-                                  scale: scale,
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedTab = 3;
-                                      _sideMenuOpen = true;
-                                    });
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute<void>(
-                                        builder: (_) => ProfileScreen(
-                                          displayName: widget.displayName,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                                const Spacer(),
-                                IconButton(
-                                  onPressed: () =>
-                                      setState(() => _sideMenuOpen = false),
-                                  icon: Icon(
-                                    Icons.chevron_left,
-                                    color: const Color(0xFF28639B),
-                                    size: 30 * scale,
-                                  ),
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: const Color(0xFFEFE4CF),
-                                    shape: const CircleBorder(),
-                                  ),
-                                ),
-                              ],
-                            )
-                          : Align(
-                              alignment: Alignment.center,
-                              child: Container(
-                                width: 52 * scale,
-                                height: 52 * scale,
-                                margin: EdgeInsets.only(top: 8 * scale),
-                                child: IconButton(
-                                  onPressed: () =>
-                                      setState(() => _sideMenuOpen = true),
-                                  icon: Icon(
-                                    Icons.menu,
-                                    color: Colors.white,
-                                    size: 28 * scale,
-                                  ),
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: const Color(0xFF5D7E9E),
-                                    foregroundColor: Colors.white,
-                                    minimumSize: Size.zero,
-                                    padding: EdgeInsets.zero,
-                                    shape: const CircleBorder(),
-                                  ),
-                                ),
+                  top: 70 * sidebarScale,
+                  bottom: 64 * sidebarScale,
+                  child: AppSidebar(
+                    scale: sidebarScale,
+                    isPhone: isPhone,
+                    isOpen: _sideMenuOpen,
+                    selectedIndex: 0,
+                    onOpenChanged: (open) =>
+                        setState(() => _sideMenuOpen = open),
+                    onDestinationSelected: (index) {
+                      setState(() => _sideMenuOpen = true);
+                      switch (index) {
+                        case 0:
+                          break;
+                        case 1:
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => CatalogScreen(
+                                displayName: widget.displayName,
+                                userId: _accountId,
                               ),
                             ),
-                    ),
+                          );
+                        case 2:
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => LibraryScreen(
+                                displayName: widget.displayName,
+                                userId: _accountId,
+                                initialSidebarOpen: true,
+                              ),
+                            ),
+                          );
+                        case 3:
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => ProfileScreen(
+                                displayName: widget.displayName,
+                                userId: _accountId,
+                              ),
+                            ),
+                          );
+                      }
+                    },
                   ),
                 ),
                 if (_showFloatingButton)
@@ -565,8 +471,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
                             builder: (_) => widget.paidPlan
-                                ? PaidQrScreen(displayName: widget.displayName)
-                                : FreeQrScreen(displayName: widget.displayName),
+                                ? PaidQrScreen(
+                                    displayName: widget.displayName,
+                                    userId: _accountId,
+                                  )
+                                : FreeQrScreen(
+                                    displayName: widget.displayName,
+                                    userId: _accountId,
+                                  ),
                           ),
                         );
                       },
@@ -579,75 +491,39 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     );
 
-    return Scaffold(
-      floatingActionButton: const ScreenCloseButton(confirmExit: true),
-      floatingActionButtonLocation: screenCloseButtonLocation,
-      body: useFullScreen ? body : SafeArea(child: body),
-    );
+    return Scaffold(body: useFullScreen ? body : SafeArea(child: body));
   }
 }
 
-class _NewsBackground extends StatelessWidget {
-  const _NewsBackground();
-
-  static const _leftImages = [
-    'assets/images/noticias/NoticiaProyecto001.jpg',
-    'assets/images/noticias/NoticiaProyecto002.jpg',
-    'assets/images/noticias/NoticiaProyecto003.jpg',
-  ];
-  static const _rightImages = [
-    'assets/images/noticias/NoticiaProyecto004.jpg',
-    'assets/images/noticias/NoticiaProyecto005.jpg',
-    'assets/images/noticias/NoticiaProyecto006.jpg',
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(175, 48, 20, 10),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          _NewsColumn(imagePaths: _leftImages),
-          _NewsColumn(imagePaths: _rightImages),
-        ],
-      ),
-    );
-  }
-}
-
-class _NewsColumn extends StatelessWidget {
-  const _NewsColumn({required this.imagePaths});
+class _HomeNewsColumn extends StatelessWidget {
+  const _HomeNewsColumn({required this.imagePaths});
 
   final List<String> imagePaths;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 205,
-      child: Column(
-        children: imagePaths
-            .map(
-              (imagePath) => Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 9),
-                  child: Opacity(
-                    opacity: 0.62,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Image.asset(
-                        imagePath,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        filterQuality: FilterQuality.medium,
-                      ),
+    return Column(
+      children: imagePaths
+          .map(
+            (imagePath) => Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 9),
+                child: Opacity(
+                  opacity: 0.62,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.asset(
+                      imagePath,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      filterQuality: FilterQuality.medium,
                     ),
                   ),
                 ),
               ),
-            )
-            .toList(),
-      ),
+            ),
+          )
+          .toList(),
     );
   }
 }
@@ -695,21 +571,28 @@ class _HomeHeader extends StatelessWidget {
               ),
               SizedBox(width: 22 * scale),
               Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(top: 44 * scale),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'BookSmart\nReading & knowledge',
-                      style: TextStyle(
-                        fontSize: 31 * scale,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.black,
-                        height: 1.05,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final useThreeLines = constraints.maxWidth < 260 * scale;
+                    return Padding(
+                      padding: EdgeInsets.only(top: 44 * scale),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          useThreeLines
+                              ? 'BookSmart\nReading &\nknowledge'
+                              : 'BookSmart\nReading & knowledge',
+                          style: TextStyle(
+                            fontSize: (useThreeLines ? 23 : 31) * scale,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.black,
+                            height: 1.05,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ),
             ],
@@ -718,7 +601,7 @@ class _HomeHeader extends StatelessWidget {
             left: 16 * scale,
             bottom: -8 * scale,
             child: Text(
-              'Bienvenido/a:     $displayName',
+              '${localizedText(context, 'Bienvenido/a:', 'Welcome:')}     $displayName',
               style: TextStyle(
                 fontSize: 25 * scale,
                 fontWeight: FontWeight.w900,
@@ -800,6 +683,7 @@ class _BookCard extends StatelessWidget {
     required this.color,
     required this.imagePath,
     required this.scale,
+    required this.onTap,
   });
 
   final String title;
@@ -807,97 +691,54 @@ class _BookCard extends StatelessWidget {
   final Color color;
   final String imagePath;
   final double scale;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 82 * scale,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            height: 98 * scale,
-            width: 68 * scale,
-            margin: EdgeInsets.only(left: 8 * scale),
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(3 * scale),
-              boxShadow: const [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 3,
-                  offset: Offset(2, 2),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(3 * scale),
-              child: BookCoverImage(path: imagePath),
-            ),
-          ),
-          SizedBox(height: 5 * scale),
-          Text(
-            'Continuar..',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 12 * scale, fontWeight: FontWeight.w700),
-          ),
-          Text(
-            '★ $pages',
-            maxLines: 1,
-            style: TextStyle(
-              color: const Color(0xFFE8B72C),
-              fontSize: 13 * scale,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SideMenuItem extends StatelessWidget {
-  const _SideMenuItem({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.scale,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final double scale;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
+      key: ValueKey('home_book_$title'),
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16 * scale),
-      child: Container(
-        width: double.infinity,
-        padding: EdgeInsets.symmetric(vertical: 8 * scale),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFF5D7E9E) : Colors.transparent,
-          borderRadius: BorderRadius.circular(16 * scale),
-        ),
+      child: SizedBox(
+        width: 82 * scale,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              icon,
-              color: selected ? Colors.white : const Color(0xFF28639B),
-              size: 28 * scale,
+            Container(
+              height: 98 * scale,
+              width: 68 * scale,
+              margin: EdgeInsets.only(left: 8 * scale),
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(3 * scale),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 3,
+                    offset: Offset(2, 2),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(3 * scale),
+                child: BookCoverImage(path: imagePath),
+              ),
             ),
-            SizedBox(height: 4 * scale),
+            SizedBox(height: 5 * scale),
             Text(
-              label,
-              textAlign: TextAlign.center,
+              localizedText(context, 'Continuar..', 'Continue..'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: selected ? Colors.white : const Color(0xFF1E2A39),
-                fontSize: 11 * scale,
+                fontSize: 12 * scale,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Text(
+              '★ ${localizedText(context, pages, pages.replaceAll(' pág.', ' pages'))}',
+              maxLines: 1,
+              style: TextStyle(
+                color: const Color(0xFFE8B72C),
+                fontSize: 13 * scale,
                 fontWeight: FontWeight.w700,
               ),
             ),

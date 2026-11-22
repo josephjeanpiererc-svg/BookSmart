@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../utils/app_localization.dart';
 import '../utils/platform_layout.dart';
 import '../widgets/booksmart_widgets.dart';
 import 'cart_screen.dart';
@@ -97,7 +98,11 @@ class PaidProfileScreen extends StatelessWidget {
                               ),
                             ),
                             Text(
-                              'Membresía premium activa',
+                              localizedText(
+                                context,
+                                'Membresía premium activa',
+                                'Premium membership active',
+                              ),
                               style: TextStyle(
                                 fontSize: 16 * scale,
                                 fontWeight: FontWeight.w700,
@@ -117,7 +122,11 @@ class PaidProfileScreen extends StatelessWidget {
                               child: Column(
                                 children: [
                                   Text(
-                                    'Invita y gana\nCódigo del personal',
+                                    localizedText(
+                                      context,
+                                      'Invita y gana\nCódigo del personal',
+                                      'Invite and earn\nStaff code',
+                                    ),
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       fontSize: 16 * scale,
@@ -146,7 +155,11 @@ class PaidProfileScreen extends StatelessWidget {
                                   ),
                                   SizedBox(height: 8 * scale),
                                   Text(
-                                    'Gana 1 VIP gratis\nreferidos completados',
+                                    localizedText(
+                                      context,
+                                      'Gana 1 VIP gratis\nreferidos completados',
+                                      'Earn 1 free VIP\ncompleted referrals',
+                                    ),
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       fontSize: 16 * scale,
@@ -160,17 +173,29 @@ class PaidProfileScreen extends StatelessWidget {
                             SizedBox(height: 22 * scale),
                             _ProfileOption(
                               icon: Icons.settings,
-                              label: 'Ajustes de lectura',
+                              label: localizedText(
+                                context,
+                                'Ajustes de lectura',
+                                'Reading settings',
+                              ),
                               scale: scale,
                             ),
                             _ProfileOption(
                               icon: Icons.add_circle,
-                              label: 'Suscripción',
+                              label: localizedText(
+                                context,
+                                'Suscripción',
+                                'Subscription',
+                              ),
                               scale: scale,
                             ),
                             _ProfileOption(
                               icon: Icons.receipt_long,
-                              label: 'Comprobantes',
+                              label: localizedText(
+                                context,
+                                'Comprobantes',
+                                'Receipts',
+                              ),
                               scale: scale,
                             ),
                           ],
@@ -232,10 +257,11 @@ class _ProfileOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final comingSoon = localizedText(context, 'próximamente', 'coming soon');
     return InkWell(
-      onTap: () =>
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text('$label próximamente'))),
+      onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$label $comingSoon')),
+      ),
       borderRadius: BorderRadius.circular(12 * scale),
       child: Padding(
         padding: EdgeInsets.symmetric(vertical: 9 * scale),
@@ -280,13 +306,13 @@ class _PaidProfileNavigation extends StatelessWidget {
       Icons.check_circle,
       Icons.person,
     ];
-    const labels = [
-      'Inicio',
-      'Carrito',
-      'Catálogo',
-      'Favoritos',
-      'Completados',
-      'Perfil',
+    final labels = [
+      localizedText(context, 'Inicio', 'Home'),
+      localizedText(context, 'Carrito', 'Cart'),
+      localizedText(context, 'Catálogo', 'Catalog'),
+      localizedText(context, 'Favoritos', 'Favorites'),
+      localizedText(context, 'Completados', 'Completed'),
+      localizedText(context, 'Perfil', 'Profile'),
     ];
     return Container(
       decoration: const BoxDecoration(

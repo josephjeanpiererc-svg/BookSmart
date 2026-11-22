@@ -19,6 +19,7 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="BookSmart: reading and knowledge.">
+  <meta name="google-signin-client_id" content="124623828564-a954odqh2ic523mbj9olihsh302d2ghf.apps.googleusercontent.com">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -41,6 +42,23 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
-  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    const startBookSmart = () => {
+      const bootstrap = document.createElement('script');
+      bootstrap.src = 'flutter_bootstrap.js';
+      bootstrap.async = true;
+      document.body.appendChild(bootstrap);
+    };
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('booksmart_service_worker.js', {
+        updateViaCache: 'none'
+      })
+        .catch((error) => {
+          console.error('BookSmart offline cache could not be started:', error);
+        });
+    }
+    startBookSmart();
+  </script>
 </body>
 </html>

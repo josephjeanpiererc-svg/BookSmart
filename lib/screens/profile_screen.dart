@@ -1,18 +1,22 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../data/booksmart_database.dart';
+import '../utils/app_localization.dart';
 import '../utils/platform_layout.dart';
 import '../utils/profile_image_picker.dart';
 import '../utils/profile_image_persistence.dart';
 import '../widgets/booksmart_widgets.dart';
+import '../widgets/navigation/app_sidebar.dart';
 import 'catalog_screen.dart';
 import 'home_screen.dart';
 import 'library_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key, this.displayName = 'Usuario'});
+  const ProfileScreen({super.key, this.displayName = 'Usuario', this.userId});
 
   final String displayName;
+  final String? userId;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -22,33 +26,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Uint8List? _profileImageBytes;
   bool _sideMenuOpen = true;
 
-  void _toggleSideMenu(bool open) {
-    if (_sideMenuOpen != open) {
-      setState(() => _sideMenuOpen = open);
-    }
-  }
-
-  void _handleSideMenuDragUpdate(DragUpdateDetails details) {
-    if (!isPhoneLayout(MediaQuery.sizeOf(context).width)) {
-      return;
-    }
-
-    final delta = details.primaryDelta ?? 0;
-    if (delta > 0 && !_sideMenuOpen) {
-      _toggleSideMenu(true);
-    } else if (delta < 0 && _sideMenuOpen) {
-      _toggleSideMenu(false);
-    }
-  }
-
-  void _handleSideMenuDragEnd(DragEndDetails details) {
-    final velocity = details.primaryVelocity ?? 0;
-    if (velocity > 180) {
-      _toggleSideMenu(true);
-    } else if (velocity < -180) {
-      _toggleSideMenu(false);
-    }
-  }
+  String get _accountId => widget.userId ?? widget.displayName;
 
   @override
   void initState() {
@@ -57,7 +35,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadSavedProfileImage() async {
-    final bytes = await loadProfileImageForUser(widget.displayName);
+    final bytes = await loadProfileImageForUser(_accountId);
     if (!mounted) {
       return;
     }
@@ -73,7 +51,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    await saveProfileImageForUser(widget.displayName, bytes);
+    await saveProfileImageForUser(_accountId, bytes);
 
     if (!mounted) {
       return;
@@ -82,6 +60,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() {
       _profileImageBytes = bytes;
     });
+  }
+
+  Future<void> _showPersonalData() async {
+    final user = kIsWeb && widget.userId != null
+        ? await BooksmartDatabase.instance.loadUser(widget.userId!)
+        : null;
+    if (!mounted) return;
+
+    final unavailable = localizedText(context, 'No disponible', 'Unavailable');
+    String valueOrUnavailable(String? value) =>
+        value == null || value.isEmpty ? unavailable : value;
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          localizedText(dialogContext, 'Datos personales', 'Personal data'),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _PersonalDataField(
+              label: localizedText(dialogContext, 'Nombre', 'Name'),
+              value: user?.displayName.isNotEmpty == true
+                  ? user!.displayName
+                  : widget.displayName,
+            ),
+            _PersonalDataField(
+              label: localizedText(dialogContext, 'Usuario', 'Username'),
+              value: valueOrUnavailable(user?.username),
+            ),
+            _PersonalDataField(
+              label: localizedText(
+                dialogContext,
+                'Correo electrónico',
+                'Email address',
+              ),
+              value: valueOrUnavailable(user?.email),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(localizedText(dialogContext, 'Cerrar', 'Close')),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -103,8 +131,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final scale = useFullScreen
               ? (width / 430).clamp(0.72, 1.0)
               : (frameWidth / 375).clamp(0.68, 1.1);
-          final phoneRailOpenWidth = 92.0 * scale;
-          final phoneRailClosedWidth = 56.0 * scale;
+          final sidebarScale = AppSidebar.scaleFor(width);
+          final sidebarWidth = AppSidebar.widthFor(
+            scale: sidebarScale,
+            isPhone: isPhone,
+            isOpen: _sideMenuOpen,
+          );
 
           return Center(
             child: Container(
@@ -131,15 +163,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Expanded(
                         child: SingleChildScrollView(
                           padding: EdgeInsets.fromLTRB(
-                            isPhone
-                                ? 24 * scale +
-                                      (_sideMenuOpen
-                                          ? phoneRailOpenWidth
-                                          : phoneRailClosedWidth)
-                                : 24 * scale +
-                                      (_sideMenuOpen
-                                          ? 120 * scale
-                                          : 52 * scale),
+                            24 * scale + sidebarWidth,
                             34 * scale,
                             24 * scale,
                             18 * scale,
@@ -184,7 +208,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       foregroundColor: const Color(0xFF285A98),
                                     ),
                                     child: Text(
-                                      'Cambiar foto',
+                                      localizedText(
+                                        context,
+                                        'Cambiar foto',
+                                        'Change photo',
+                                      ),
                                       style: TextStyle(
                                         fontSize: 16 * scale,
                                         fontWeight: FontWeight.w700,
@@ -193,7 +221,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                   SizedBox(height: 12 * scale),
                                   Text(
-                                    'Bienvenido :',
+                                    localizedText(
+                                      context,
+                                      'Bienvenido :',
+                                      'Welcome:',
+                                    ),
                                     style: TextStyle(
                                       fontSize: 26 * scale,
                                       fontWeight: FontWeight.w700,
@@ -210,18 +242,79 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   SizedBox(height: 18 * scale),
                                   _ProfileOption(
                                     icon: Icons.settings,
-                                    label: 'Ajustes de lectura',
+                                    label: localizedText(
+                                      context,
+                                      'Ajustes de lectura',
+                                      'Reading settings',
+                                    ),
                                     scale: scale,
                                   ),
                                   _ProfileOption(
                                     icon: Icons.notifications,
-                                    label: 'Notificaciones',
+                                    label: localizedText(
+                                      context,
+                                      'Notificaciones',
+                                      'Notifications',
+                                    ),
                                     scale: scale,
                                   ),
                                   _ProfileOption(
                                     icon: Icons.lock_outline,
-                                    label: 'Privacidad',
+                                    label: localizedText(
+                                      context,
+                                      'Privacidad',
+                                      'Privacy',
+                                    ),
                                     scale: scale,
+                                  ),
+                                  _ProfileOption(
+                                    icon: Icons.badge_outlined,
+                                    label: localizedText(
+                                      context,
+                                      'Datos personales',
+                                      'Personal data',
+                                    ),
+                                    scale: scale,
+                                    onTap: _showPersonalData,
+                                  ),
+                                  SizedBox(height: 24 * scale),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 50 * scale,
+                                    child: ElevatedButton.icon(
+                                      key: const ValueKey('logout_button'),
+                                      onPressed: () =>
+                                          Navigator.of(
+                                            context,
+                                            rootNavigator: true,
+                                          ).pushNamedAndRemoveUntil(
+                                            '/login',
+                                            (route) => false,
+                                          ),
+                                      icon: const Icon(Icons.logout),
+                                      label: Text(
+                                        localizedText(
+                                          context,
+                                          'Cerrar sesión',
+                                          'Sign out',
+                                        ),
+                                        style: TextStyle(
+                                          fontSize: 16 * scale,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(
+                                          0xFFB3261E,
+                                        ),
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            14 * scale,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -233,228 +326,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   Positioned(
                     left: 0,
-                    top: 70 * scale,
-                    bottom: 64 * scale,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onHorizontalDragUpdate: isPhone
-                          ? _handleSideMenuDragUpdate
-                          : null,
-                      onHorizontalDragEnd: isPhone
-                          ? _handleSideMenuDragEnd
-                          : null,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 220),
-                        width: isPhone
-                            ? (_sideMenuOpen
-                                  ? phoneRailOpenWidth
-                                  : phoneRailClosedWidth)
-                            : (_sideMenuOpen ? 130 * scale : 54 * scale),
-                        padding: EdgeInsets.fromLTRB(
-                          8 * scale,
-                          12 * scale,
-                          8 * scale,
-                          12 * scale,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFDCC9AA),
-                          border: Border.all(
-                            color: const Color(0xFF2F6C9A),
-                            width: 3 * scale,
+                    top: 70 * sidebarScale,
+                    bottom: 64 * sidebarScale,
+                    child: AppSidebar(
+                      scale: sidebarScale,
+                      isPhone: isPhone,
+                      isOpen: _sideMenuOpen,
+                      selectedIndex: 3,
+                      onOpenChanged: (open) =>
+                          setState(() => _sideMenuOpen = open),
+                      onDestinationSelected: (index) {
+                        if (index == 3) return;
+                        final screen = switch (index) {
+                          0 => HomeScreen(
+                            displayName: widget.displayName,
+                            userId: _accountId,
                           ),
-                          borderRadius: BorderRadius.only(
-                            topRight: Radius.circular(18 * scale),
-                            bottomRight: Radius.circular(18 * scale),
+                          1 => CatalogScreen(
+                            displayName: widget.displayName,
+                            userId: _accountId,
                           ),
-                        ),
-                        child: isPhone
-                            ? Column(
-                                children: [
-                                  if (_sideMenuOpen) ...[
-                                    _SideMenuItem(
-                                      icon: Icons.home,
-                                      label: 'Inicio',
-                                      selected: false,
-                                      scale: scale,
-                                      onTap: () {
-                                        Navigator.of(context).push(
-                                          MaterialPageRoute<void>(
-                                            builder: (_) => HomeScreen(
-                                              displayName: widget.displayName,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                    SizedBox(height: 14 * scale),
-                                    _SideMenuItem(
-                                      icon: Icons.business_center,
-                                      label: 'Catalogo',
-                                      selected: false,
-                                      scale: scale,
-                                      onTap: () {
-                                        Navigator.of(context).push(
-                                          MaterialPageRoute<void>(
-                                            builder: (_) => CatalogScreen(
-                                              displayName: widget.displayName,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                    SizedBox(height: 14 * scale),
-                                    _SideMenuItem(
-                                      icon: Icons.menu_book,
-                                      label: 'Mi Biblioteca',
-                                      selected: false,
-                                      scale: scale,
-                                      onTap: () {
-                                        Navigator.of(context).push(
-                                          MaterialPageRoute<void>(
-                                            builder: (_) => LibraryScreen(
-                                              displayName: widget.displayName,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                    SizedBox(height: 14 * scale),
-                                    _SideMenuItem(
-                                      icon: Icons.person,
-                                      label: 'Perfil',
-                                      selected: true,
-                                      scale: scale,
-                                      onTap: () {},
-                                    ),
-                                  ],
-                                  const Spacer(),
-                                  IconButton(
-                                    onPressed: () => setState(
-                                      () => _sideMenuOpen = !_sideMenuOpen,
-                                    ),
-                                    icon: Icon(
-                                      _sideMenuOpen
-                                          ? Icons.chevron_left
-                                          : Icons.menu,
-                                      color: const Color(0xFF28639B),
-                                      size: 30 * scale,
-                                    ),
-                                    style: IconButton.styleFrom(
-                                      backgroundColor: const Color(0xFFEFE4CF),
-                                      foregroundColor: Colors.white,
-                                      minimumSize: Size.zero,
-                                      padding: EdgeInsets.zero,
-                                      shape: const CircleBorder(),
-                                    ),
-                                  ),
-                                ],
-                              )
-                            : _sideMenuOpen
-                            ? Column(
-                                children: [
-                                  _SideMenuItem(
-                                    icon: Icons.home,
-                                    label: 'Inicio',
-                                    selected: false,
-                                    scale: scale,
-                                    onTap: () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute<void>(
-                                          builder: (_) => HomeScreen(
-                                            displayName: widget.displayName,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                  SizedBox(height: 14 * scale),
-                                  _SideMenuItem(
-                                    icon: Icons.business_center,
-                                    label: 'Catalogo',
-                                    selected: false,
-                                    scale: scale,
-                                    onTap: () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute<void>(
-                                          builder: (_) => CatalogScreen(
-                                            displayName: widget.displayName,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                  SizedBox(height: 14 * scale),
-                                  _SideMenuItem(
-                                    icon: Icons.menu_book,
-                                    label: 'Mi Biblioteca',
-                                    selected: false,
-                                    scale: scale,
-                                    onTap: () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute<void>(
-                                          builder: (_) => LibraryScreen(
-                                            displayName: widget.displayName,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                  SizedBox(height: 14 * scale),
-                                  _SideMenuItem(
-                                    icon: Icons.person,
-                                    label: 'Perfil',
-                                    selected: true,
-                                    scale: scale,
-                                    onTap: () {},
-                                  ),
-                                  const Spacer(),
-                                  IconButton(
-                                    onPressed: () =>
-                                        setState(() => _sideMenuOpen = false),
-                                    icon: Icon(
-                                      Icons.chevron_left,
-                                      color: const Color(0xFF28639B),
-                                      size: 30 * scale,
-                                    ),
-                                    style: IconButton.styleFrom(
-                                      backgroundColor: const Color(0xFFEFE4CF),
-                                      foregroundColor: Colors.white,
-                                      minimumSize: Size.zero,
-                                      padding: EdgeInsets.zero,
-                                      shape: const CircleBorder(),
-                                    ),
-                                  ),
-                                ],
-                              )
-                            : Align(
-                                alignment: Alignment.center,
-                                child: Container(
-                                  width: 46 * scale,
-                                  height: 46 * scale,
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFF5D7E9E),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: IconButton(
-                                    onPressed: () =>
-                                        setState(() => _sideMenuOpen = true),
-                                    icon: Icon(
-                                      Icons.menu,
-                                      color: Colors.white,
-                                      size: 26 * scale,
-                                    ),
-                                    padding: EdgeInsets.zero,
-                                    splashRadius: 18 * scale,
-                                    constraints: const BoxConstraints(),
-                                    style: IconButton.styleFrom(
-                                      minimumSize: Size.zero,
-                                      padding: EdgeInsets.zero,
-                                      shape: const CircleBorder(),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                      ),
+                          2 => LibraryScreen(
+                            displayName: widget.displayName,
+                            userId: _accountId,
+                          ),
+                          _ => null,
+                        };
+                        if (screen != null) {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(builder: (_) => screen),
+                          );
+                        }
+                      },
                     ),
                   ),
                 ],
@@ -472,18 +375,23 @@ class _ProfileOption extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.scale,
+    this.onTap,
   });
 
   final IconData icon;
   final String label;
   final double scale;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    final comingSoon = localizedText(context, 'próximamente', 'coming soon');
     return InkWell(
-      onTap: () =>
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text('$label próximamente'))),
+      onTap:
+          onTap ??
+          () =>
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: Text('$label $comingSoon'))),
       borderRadius: BorderRadius.circular(14 * scale),
       child: Padding(
         padding: EdgeInsets.symmetric(vertical: 10 * scale),
@@ -512,52 +420,22 @@ class _ProfileOption extends StatelessWidget {
   }
 }
 
-class _SideMenuItem extends StatelessWidget {
-  const _SideMenuItem({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.scale,
-    required this.onTap,
-  });
+class _PersonalDataField extends StatelessWidget {
+  const _PersonalDataField({required this.label, required this.value});
 
-  final IconData icon;
   final String label;
-  final bool selected;
-  final double scale;
-  final VoidCallback onTap;
+  final String value;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16 * scale),
-      child: Container(
-        width: double.infinity,
-        padding: EdgeInsets.symmetric(vertical: 8 * scale),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFF5D7E9E) : Colors.transparent,
-          borderRadius: BorderRadius.circular(16 * scale),
-        ),
-        child: Column(
-          children: [
-            Icon(
-              icon,
-              color: selected ? Colors.white : const Color(0xFF28639B),
-              size: 28 * scale,
-            ),
-            SizedBox(height: 4 * scale),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: selected ? Colors.white : const Color(0xFF1E2A39),
-                fontSize: 11 * scale,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+          SelectableText(value),
+        ],
       ),
     );
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:web/web.dart' as web;
 
+import '../utils/app_localization.dart';
 import 'booksmart_widgets.dart';
 
 class QrDownloadButton extends StatelessWidget {
@@ -28,11 +29,19 @@ class QrDownloadButton extends StatelessWidget {
         } catch (_) {
           if (!context.mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No se pudo descargar el QR.')),
+            SnackBar(
+              content: Text(
+                localizedText(
+                  context,
+                  'No se pudo descargar el QR.',
+                  'Could not download the QR code.',
+                ),
+              ),
+            ),
           );
         }
       },
-      tooltip: 'Descargar QR',
+      tooltip: localizedText(context, 'Descargar QR', 'Download QR code'),
       icon: const Icon(Icons.download),
     );
   }

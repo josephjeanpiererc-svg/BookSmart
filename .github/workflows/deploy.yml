@@ -35,6 +35,14 @@ jobs:
       - name: Build web
         run: flutter build web --release --base-href "/BookSmart/"
 
+      - name: Build Android debug APK
+        run: flutter build apk --debug
+
+      - name: Add APK to web download
+        run: |
+          mkdir -p build/web/downloads
+          cp build/app/outputs/flutter-apk/app-debug.apk build/web/downloads/booksmart.apk
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

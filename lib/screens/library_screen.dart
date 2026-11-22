@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../utils/app_localization.dart';
 import '../utils/platform_layout.dart';
 import '../widgets/booksmart_widgets.dart';
+import '../widgets/navigation/app_sidebar.dart';
 import 'catalog_screen.dart';
 import 'home_screen.dart';
 import 'pdf_reader_screen.dart';
@@ -12,11 +14,15 @@ class LibraryScreen extends StatefulWidget {
   const LibraryScreen({
     super.key,
     this.displayName = 'Usuario',
+    this.userId,
     this.initialBookTitle,
+    this.initialSidebarOpen = true,
   });
 
   final String displayName;
+  final String? userId;
   final String? initialBookTitle;
+  final bool initialSidebarOpen;
 
   static List<String> ownedBooksFor(String user) =>
       CatalogScreen.ownedBookTitlesFor(user).toList();
@@ -27,19 +33,35 @@ class LibraryScreen extends StatefulWidget {
 }
 
 class _LibraryScreenState extends State<LibraryScreen> {
-  bool _sideMenuOpen = true;
+  late bool _sideMenuOpen = widget.initialSidebarOpen;
+  double _sideMenuOffset = 0;
   int _selectedTab = 0;
   final _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    if (kIsWeb) {
+      CatalogScreen.restoreUserLibrary(_accountId)
+          .then((_) {
+            if (mounted) setState(() {});
+          })
+          .catchError((Object error, StackTrace stackTrace) {
+            FlutterError.reportError(
+              FlutterErrorDetails(
+                exception: error,
+                stack: stackTrace,
+                library: 'BookSmart local database',
+                context: ErrorDescription('while loading a user library'),
+              ),
+            );
+          });
+    }
     if (widget.initialBookTitle != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         final book = widget.initialBookTitle!;
-        if (CatalogScreen.ownedBookTitlesFor(widget.displayName)
-            .contains(book)) {
+        if (CatalogScreen.ownedBookTitlesFor(_accountId).contains(book)) {
           _openInitialBook(book);
         }
       });
@@ -53,15 +75,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
       imagePath: CatalogScreen.imagePathForTitle(title),
       scale: scale,
       displayName: widget.displayName,
-      isCompleted: CatalogScreen.completedBookTitlesFor(widget.displayName)
+      userId: _accountId,
+      isCompleted: CatalogScreen.completedBookTitlesFor(_accountId)
           .contains(title),
-      isPending: CatalogScreen.pendingBookTitlesFor(widget.displayName)
-          .contains(title),
-      isFavorite: CatalogScreen.favoriteBookTitlesFor(widget.displayName)
+      isPending: CatalogScreen.pendingBookTitlesFor(_accountId).contains(title),
+      isFavorite: CatalogScreen.favoriteBookTitlesFor(_accountId)
           .contains(title),
       onChanged: () => setState(() {}),
     )._openBookDetail(context);
   }
+
+  String get _accountId => widget.userId ?? widget.displayName;
 
   @override
   void dispose() {
@@ -69,36 +93,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
     super.dispose();
   }
 
-  void _toggleSideMenu(bool open) {
-    if (_sideMenuOpen != open) {
-      setState(() => _sideMenuOpen = open);
-    }
-  }
-
-  void _handleSideMenuDragUpdate(DragUpdateDetails details) {
-    if (!isPhoneLayout(MediaQuery.sizeOf(context).width)) {
-      return;
-    }
-
-    final delta = details.primaryDelta ?? 0;
-    if (delta > 0 && !_sideMenuOpen) {
-      _toggleSideMenu(true);
-    } else if (delta < 0 && _sideMenuOpen) {
-      _toggleSideMenu(false);
-    }
-  }
-
-  void _handleSideMenuDragEnd(DragEndDetails details) {
-    final velocity = details.primaryVelocity ?? 0;
-    if (velocity > 180) {
-      _toggleSideMenu(true);
-    } else if (velocity < -180) {
-      _toggleSideMenu(false);
-    }
-  }
-
   List<String> get _activeBooks {
-    final userKey = widget.displayName;
+    final userKey = _accountId;
     final ownedBooks = CatalogScreen.ownedBookTitlesFor(userKey);
     switch (_selectedTab) {
       case 0:
@@ -140,6 +136,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final useFullScreen =
         shouldUseFullScreenLayout(defaultTargetPlatform) || kIsWeb;
     final displayName = widget.displayName;
+    final userId = _accountId;
     final activeBooks = _filteredBooks;
 
     return Scaffold(
@@ -155,13 +152,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
           final scale = useFullScreen
               ? (width / 600).clamp(0.82, 1.0)
               : (frameWidth / 375).clamp(0.68, 1.1);
-          final phoneRailOpenWidth = 112.0 * scale;
-          final phoneRailClosedWidth = 58.0 * scale;
-          final contentLeftPadding = isPhone
-              ? 14 * scale +
-                    (_sideMenuOpen ? phoneRailOpenWidth : phoneRailClosedWidth)
-              : 14 * scale + (_sideMenuOpen ? 108 * scale : 48 * scale);
-          final menuWidth = isPhone ? phoneRailOpenWidth : 118.0 * scale;
+          final sidebarScale = AppSidebar.scaleFor(width);
+          final sidebarWidth = AppSidebar.widthFor(
+            scale: sidebarScale,
+            isPhone: isPhone,
+            isOpen: _sideMenuOpen,
+          );
+          final horizontalPadding = 30 * scale;
+          final layoutWidth = frameWidth - (useFullScreen ? 0 : 18 * scale);
+          final maxSidebarOffset = isPhone
+              ? (layoutWidth - sidebarWidth - horizontalPadding - 180 * scale)
+                    .clamp(0.0, double.infinity)
+              : 0.0;
+          final sidebarLeft = _sideMenuOffset.clamp(0.0, maxSidebarOffset);
+          final contentLeftPadding = 14 * scale + sidebarLeft + sidebarWidth;
 
           return Center(
             child: Container(
@@ -216,6 +220,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                   SizedBox(height: 6 * scale),
                                   _LibraryTabs(
                                     selectedTab: _selectedTab,
+                                    scale: scale,
                                     onChanged: (index) => setState(() {
                                       _selectedTab = index;
                                       _searchController.clear();
@@ -227,7 +232,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                     controller: _searchController,
                                     onChanged: (_) => setState(() {}),
                                     decoration: InputDecoration(
-                                      hintText: 'Buscar en mi biblioteca',
+                                      hintText: localizedText(
+                                        context,
+                                        'Buscar en mi biblioteca',
+                                        'Search my library',
+                                      ),
                                       hintStyle: TextStyle(
                                         color: Colors.white,
                                         fontSize: 18 * scale,
@@ -271,12 +280,28 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                     ),
                                     child: Text(
                                       _selectedTab == 0
-                                          ? 'Aún no tienes libros en lectura.'
+                                          ? localizedText(
+                                              context,
+                                              'Aún no tienes libros en lectura.',
+                                              'You have no books in progress yet.',
+                                            )
                                           : _selectedTab == 1
-                                          ? 'Aún no tienes libros completados.'
+                                          ? localizedText(
+                                              context,
+                                              'Aún no tienes libros completados.',
+                                              'You have no completed books yet.',
+                                            )
                                           : _selectedTab == 2
-                                          ? 'Aún no tienes libros pendientes.'
-                                          : 'Aún no tienes libros favoritos.',
+                                          ? localizedText(
+                                              context,
+                                              'Aún no tienes libros pendientes.',
+                                              'You have no pending books yet.',
+                                            )
+                                          : localizedText(
+                                              context,
+                                              'Aún no tienes libros favoritos.',
+                                              'You have no favorite books yet.',
+                                            ),
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
                                         fontSize: 16 * scale,
@@ -304,17 +329,18 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                               ),
                                           scale: scale,
                                           displayName: widget.displayName,
+                                          userId: userId,
                                           isCompleted:
                                               CatalogScreen.completedBookTitlesFor(
-                                                widget.displayName,
+                                                userId,
                                               ).contains(title),
                                           isPending:
                                               CatalogScreen.pendingBookTitlesFor(
-                                                widget.displayName,
+                                                userId,
                                               ).contains(title),
                                           isFavorite:
                                               CatalogScreen.favoriteBookTitlesFor(
-                                                widget.displayName,
+                                                userId,
                                               ).contains(title),
                                           onChanged: () => setState(() {}),
                                         ),
@@ -328,126 +354,47 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     ],
                   ),
                   Positioned(
-                    left: 0,
-                    top: 70 * scale,
-                    bottom: 64 * scale,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onHorizontalDragUpdate: isPhone
-                          ? _handleSideMenuDragUpdate
+                    left: sidebarLeft,
+                    top: 70 * sidebarScale,
+                    bottom: 64 * sidebarScale,
+                    child: AppSidebar(
+                      scale: sidebarScale,
+                      isPhone: isPhone,
+                      isOpen: _sideMenuOpen,
+                      selectedIndex: 2,
+                      onOpenChanged: (open) =>
+                          setState(() => _sideMenuOpen = open),
+                      onHorizontalDragDelta: isPhone
+                          ? (delta) => setState(() {
+                              _sideMenuOffset = (sidebarLeft + delta).clamp(
+                                0.0,
+                                maxSidebarOffset,
+                              );
+                            })
                           : null,
-                      onHorizontalDragEnd: isPhone
-                          ? _handleSideMenuDragEnd
-                          : null,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 220),
-                        width: isPhone
-                            ? (_sideMenuOpen
-                                  ? phoneRailOpenWidth
-                                  : phoneRailClosedWidth)
-                            : (_sideMenuOpen ? menuWidth : 54 * scale),
-                        padding: EdgeInsets.fromLTRB(
-                          8 * scale,
-                          12 * scale,
-                          8 * scale,
-                          12 * scale,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFDCC9AA),
-                          border: Border.all(
-                            color: const Color(0xFF2F6C9A),
-                            width: 3 * scale,
+                      onDestinationSelected: (index) {
+                        if (index == 2) return;
+                        final screen = switch (index) {
+                          0 => HomeScreen(
+                            displayName: displayName,
+                            userId: userId,
                           ),
-                          borderRadius: BorderRadius.only(
-                            topRight: Radius.circular(18 * scale),
-                            bottomRight: Radius.circular(18 * scale),
+                          1 => CatalogScreen(
+                            displayName: displayName,
+                            userId: userId,
                           ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            if (_sideMenuOpen) ...[
-                              _SideMenuItem(
-                                icon: Icons.home,
-                                label: 'Inicio',
-                                selected: false,
-                                scale: scale,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) =>
-                                          HomeScreen(displayName: displayName),
-                                    ),
-                                  );
-                                },
-                              ),
-                              SizedBox(height: 14 * scale),
-                              _SideMenuItem(
-                                icon: Icons.business_center,
-                                label: 'Catalogo',
-                                selected: false,
-                                scale: scale,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) => CatalogScreen(
-                                        displayName: displayName,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                              SizedBox(height: 14 * scale),
-                              _SideMenuItem(
-                                icon: Icons.menu_book,
-                                label: 'Mi Biblioteca',
-                                selected: true,
-                                scale: scale,
-                                onTap: () {},
-                              ),
-                              SizedBox(height: 14 * scale),
-                              _SideMenuItem(
-                                icon: Icons.person,
-                                label: 'Perfil',
-                                selected: false,
-                                scale: scale,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) => ProfileScreen(
-                                        displayName: displayName,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
-                            Expanded(
-                              child: Center(
-                                child: IconButton(
-                                  onPressed: () => setState(
-                                    () => _sideMenuOpen = !_sideMenuOpen,
-                                  ),
-                                  icon: Icon(
-                                    _sideMenuOpen
-                                        ? Icons.chevron_left
-                                        : Icons.menu,
-                                    color: const Color(0xFF28639B),
-                                    size: 30 * scale,
-                                  ),
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: const Color(0xFFEFE4CF),
-                                    foregroundColor: Colors.white,
-                                    minimumSize: Size.zero,
-                                    padding: EdgeInsets.zero,
-                                    shape: const CircleBorder(),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                          3 => ProfileScreen(
+                            displayName: displayName,
+                            userId: userId,
+                          ),
+                          _ => null,
+                        };
+                        if (screen != null) {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(builder: (_) => screen),
+                          );
+                        }
+                      },
                     ),
                   ),
                 ],
@@ -461,24 +408,42 @@ class _LibraryScreenState extends State<LibraryScreen> {
 }
 
 class _LibraryTabs extends StatelessWidget {
-  const _LibraryTabs({required this.selectedTab, required this.onChanged});
+  const _LibraryTabs({
+    required this.selectedTab,
+    required this.scale,
+    required this.onChanged,
+  });
 
   final int selectedTab;
+  final double scale;
   final ValueChanged<int> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final tabs = ['Leyendo', 'Completados', 'Pendiente', 'Favorito'];
+    final tabs = [
+      localizedText(context, 'Leyendo', 'Reading'),
+      localizedText(context, 'Completados', 'Completed'),
+      localizedText(context, 'Pendiente', 'Pending'),
+      localizedText(context, 'Favorito', 'Favorites'),
+    ];
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
-      children: List.generate(
-        tabs.length,
-        (index) => GestureDetector(
-          onTap: () => onChanged(index),
-          child: _LibraryTab(
-            label: tabs[index],
-            selected: selectedTab == index,
+    return SingleChildScrollView(
+      key: const ValueKey('library_tabs_scroll'),
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(
+          tabs.length,
+          (index) => GestureDetector(
+            onTap: () => onChanged(index),
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8 * scale),
+              child: _LibraryTab(
+                label: tabs[index],
+                selected: selectedTab == index,
+                scale: scale,
+              ),
+            ),
           ),
         ),
       ),
@@ -487,9 +452,14 @@ class _LibraryTabs extends StatelessWidget {
 }
 
 class _LibraryTab extends StatelessWidget {
-  const _LibraryTab({required this.label, this.selected = false});
+  const _LibraryTab({
+    required this.label,
+    required this.scale,
+    this.selected = false,
+  });
 
   final String label;
+  final double scale;
   final bool selected;
 
   @override
@@ -498,7 +468,7 @@ class _LibraryTab extends StatelessWidget {
       label,
       style: TextStyle(
         color: selected ? const Color(0xFFE9BD40) : Colors.black54,
-        fontSize: 17,
+        fontSize: 17 * scale,
         fontWeight: FontWeight.w700,
       ),
     );
@@ -597,7 +567,7 @@ class _ReadingProgressState extends State<_ReadingProgress>
                 ),
                 SizedBox(height: 4 * widget.scale),
                 Text(
-                  'pag\nleídas',
+                  localizedText(context, 'pág.\nleídas', 'pages\nread'),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 11 * widget.scale,
@@ -614,31 +584,25 @@ class _ReadingProgressState extends State<_ReadingProgress>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      'Progreso',
-                      style: TextStyle(
-                        fontSize: 17 * widget.scale,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF1B3554),
-                      ),
-                    ),
-                    SizedBox(width: 8 * widget.scale),
-                    Text(
-                      'de Lectura',
-                      style: TextStyle(
-                        fontSize: 17 * widget.scale,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF1B3554),
-                      ),
-                    ),
-                  ],
+                Text(
+                  localizedText(
+                    context,
+                    'Progreso de lectura',
+                    'Reading progress',
+                  ),
+                  style: TextStyle(
+                    fontSize: 17 * widget.scale,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF1B3554),
+                  ),
                 ),
                 SizedBox(height: 6 * widget.scale),
                 Text(
-                  '$pagesLeft páginas',
+                  localizedText(
+                    context,
+                    '$pagesLeft páginas',
+                    '$pagesLeft pages',
+                  ),
                   style: TextStyle(
                     fontSize: 13 * widget.scale,
                     fontWeight: FontWeight.w700,
@@ -649,19 +613,19 @@ class _ReadingProgressState extends State<_ReadingProgress>
                 _AnimatedProgressBar(
                   value: progressValue,
                   scale: widget.scale,
-                  label: 'Avance',
+                  label: localizedText(context, 'Avance', 'Progress'),
                 ),
                 SizedBox(height: 8 * widget.scale),
                 _AnimatedProgressBar(
                   value: 0.86,
                   scale: widget.scale,
-                  label: 'Meta',
+                  label: localizedText(context, 'Meta', 'Goal'),
                 ),
                 SizedBox(height: 6 * widget.scale),
                 Align(
                   alignment: Alignment.centerRight,
                   child: Text(
-                    '313 páginas',
+                    localizedText(context, '313 páginas', '313 pages'),
                     style: TextStyle(
                       fontSize: 11 * widget.scale,
                       fontWeight: FontWeight.w700,
@@ -739,6 +703,7 @@ class _LibraryBook extends StatelessWidget {
     required this.imagePath,
     required this.scale,
     required this.displayName,
+    required this.userId,
     this.isCompleted = false,
     this.isPending = false,
     this.isFavorite = false,
@@ -749,6 +714,7 @@ class _LibraryBook extends StatelessWidget {
   final String imagePath;
   final double scale;
   final String displayName;
+  final String userId;
   final bool isCompleted;
   final bool isPending;
   final bool isFavorite;
@@ -821,21 +787,21 @@ class _LibraryBook extends StatelessWidget {
                 SizedBox(height: 14 * scale),
                 BookStatusControls(
                   scale: scale,
-                  status: CatalogScreen.statusForTitle(title, displayName),
-                  isFavorite: CatalogScreen.favoriteBookTitlesFor(displayName)
+                  status: CatalogScreen.statusForTitle(title, userId),
+                  isFavorite: CatalogScreen.favoriteBookTitlesFor(userId)
                       .contains(title),
                   onStatusChanged: (status) {
-                    CatalogScreen.setBookStatus(title, status, displayName);
+                    CatalogScreen.setBookStatus(title, status, userId);
                     onChanged?.call();
                   },
                   onFavoriteChanged: (isFavorite) {
-                    CatalogScreen.setFavorite(title, isFavorite, displayName);
+                    CatalogScreen.setFavorite(title, isFavorite, userId);
                     onChanged?.call();
                   },
                 ),
                 SizedBox(height: 12 * scale),
                 Text(
-                  'Descripción',
+                  localizedText(context, 'Descripción', 'Description'),
                   style: TextStyle(
                     fontSize: 13 * scale,
                     fontWeight: FontWeight.w700,
@@ -853,13 +819,21 @@ class _LibraryBook extends StatelessWidget {
                 ),
                 SizedBox(height: 16 * scale),
                 _DetailInfoRow(
-                  label: 'Fecha de publicación',
+                  label: localizedText(
+                    context,
+                    'Fecha de publicación',
+                    'Publication date',
+                  ),
                   value: book.$4,
                   scale: scale,
                 ),
                 SizedBox(height: 10 * scale),
                 _DetailInfoRow(
-                  label: '¿De qué se trata?',
+                  label: localizedText(
+                    context,
+                    '¿De qué se trata?',
+                    'About this book',
+                  ),
                   value: book.$5,
                   scale: scale,
                 ),
@@ -888,7 +862,7 @@ class _LibraryBook extends StatelessWidget {
                       ),
                     ),
                     child: Text(
-                      'Leer',
+                      localizedText(context, 'Leer', 'Read'),
                       style: TextStyle(
                         fontSize: 15 * scale,
                         fontWeight: FontWeight.w700,
@@ -971,23 +945,23 @@ class _LibraryBook extends StatelessWidget {
                       right: 6 * scale,
                       child: _LibraryStatusBadge(
                         icon:
-                            CatalogScreen.completedBookTitlesFor(displayName)
+                            CatalogScreen.completedBookTitlesFor(userId)
                                 .contains(title)
                             ? Icons.check
-                            : CatalogScreen.pendingBookTitlesFor(displayName)
+                            : CatalogScreen.pendingBookTitlesFor(userId)
                                   .contains(title)
                             ? Icons.hourglass_top_rounded
                             : Icons.book_rounded,
                         backgroundColor:
-                            CatalogScreen.completedBookTitlesFor(displayName)
+                            CatalogScreen.completedBookTitlesFor(userId)
                                 .contains(title)
                             ? const Color(0xFF2C6FB4)
-                            : CatalogScreen.pendingBookTitlesFor(displayName)
+                            : CatalogScreen.pendingBookTitlesFor(userId)
                                   .contains(title)
                             ? const Color(0xFFF0C94D)
                             : const Color(0xFF3B6FA9),
                         iconColor:
-                            CatalogScreen.pendingBookTitlesFor(displayName)
+                            CatalogScreen.pendingBookTitlesFor(userId)
                                 .contains(title)
                             ? const Color(0xFF1B3554)
                             : Colors.white,
@@ -1075,59 +1049,6 @@ class _DetailInfoRow extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _SideMenuItem extends StatelessWidget {
-  const _SideMenuItem({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.scale,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final double scale;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16 * scale),
-      child: Container(
-        width: double.infinity,
-        padding: EdgeInsets.symmetric(vertical: 8 * scale),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFF5D7E9E) : Colors.transparent,
-          borderRadius: BorderRadius.circular(16 * scale),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              color: selected ? Colors.white : const Color(0xFF28639B),
-              size: 28 * scale,
-            ),
-            SizedBox(height: 4 * scale),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: selected ? Colors.white : const Color(0xFF1E2A39),
-                fontSize: 11 * scale,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

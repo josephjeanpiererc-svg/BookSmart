@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../utils/app_localization.dart';
 import '../utils/platform_layout.dart';
 import '../widgets/booksmart_widgets.dart';
 import 'catalog_screen.dart';
@@ -79,7 +80,11 @@ class _PaidLibraryScreenState extends State<PaidLibraryScreen> {
                               Icon(Icons.menu, size: 42 * scale),
                               Expanded(
                                 child: Text(
-                                  'Mi biblioteca',
+                                  localizedText(
+                                    context,
+                                    'Mi biblioteca',
+                                    'My library',
+                                  ),
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     fontSize: 25 * scale,
@@ -95,13 +100,21 @@ class _PaidLibraryScreenState extends State<PaidLibraryScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceAround,
                             children: [
                               _PaidLibraryTab(
-                                label: 'Leyendo',
+                                label: localizedText(
+                                  context,
+                                  'Leyendo',
+                                  'Reading',
+                                ),
                                 selected: _selectedTab == 0,
                                 scale: scale,
                                 onTap: () => setState(() => _selectedTab = 0),
                               ),
                               _PaidLibraryTab(
-                                label: 'Completados',
+                                label: localizedText(
+                                  context,
+                                  'Completados',
+                                  'Completed',
+                                ),
                                 selected: _selectedTab == 1,
                                 scale: scale,
                                 onTap: () => setState(() => _selectedTab = 1),
@@ -115,8 +128,16 @@ class _PaidLibraryScreenState extends State<PaidLibraryScreen> {
                           ),
                           Text(
                             _selectedTab == 0
-                                ? 'Meta vip 14 a 24 libros...'
-                                : '50 libros completados',
+                                ? localizedText(
+                                    context,
+                                    'Meta vip 14 a 24 libros...',
+                                    'VIP goal: 14 to 24 books...',
+                                  )
+                                : localizedText(
+                                    context,
+                                    '50 libros completados',
+                                    '50 books completed',
+                                  ),
                             style: TextStyle(
                               fontSize: 15 * scale,
                               fontWeight: FontWeight.w700,

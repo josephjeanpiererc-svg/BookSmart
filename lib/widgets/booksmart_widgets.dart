@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 
+import '../utils/app_localization.dart';
 import 'qr_download.dart';
 
 String qrAssetUrl(String assetPath) {
   if (assetPath.isEmpty) {
     return '';
   }
-  return '/assets/${assetPath.replaceFirst('assets/', '')}';
+  return 'assets/$assetPath';
 }
 
 class BookCoverImage extends StatelessWidget {
@@ -40,10 +40,7 @@ class BookQrCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final image = Image.asset(assetPath, fit: BoxFit.contain);
-    final qrImage = kIsWeb
-        ? Image.network(qrAssetUrl(assetPath), fit: BoxFit.contain)
-        : image;
+    final qrImage = Image.asset(assetPath, fit: BoxFit.contain);
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -82,9 +79,14 @@ class _ScreenCloseButtonLocation extends FloatingActionButtonLocation {
 }
 
 class ScreenCloseButton extends StatelessWidget {
-  const ScreenCloseButton({super.key, this.confirmExit = false});
+  const ScreenCloseButton({
+    super.key,
+    this.confirmExit = false,
+    this.onPressed,
+  });
 
   final bool confirmExit;
+  final VoidCallback? onPressed;
 
   Future<void> _close(BuildContext context) async {
     final navigator = Navigator.of(context, rootNavigator: true);
@@ -92,16 +94,28 @@ class ScreenCloseButton extends StatelessWidget {
       final shouldExit = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('¿Regresar al inicio de sesión?'),
-          content: const Text('Tendrás que iniciar sesión nuevamente.'),
+          title: Text(
+            localizedText(
+              context,
+              '¿Regresar al inicio de sesión?',
+              'Return to sign in?',
+            ),
+          ),
+          content: Text(
+            localizedText(
+              context,
+              'Tendrás que iniciar sesión nuevamente.',
+              'You will need to sign in again.',
+            ),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancelar'),
+              child: Text(localizedText(context, 'Cancelar', 'Cancel')),
             ),
             ElevatedButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Regresar'),
+              child: Text(localizedText(context, 'Regresar', 'Return')),
             ),
           ],
         ),
@@ -126,13 +140,13 @@ class ScreenCloseButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: 'Cerrar',
+      message: localizedText(context, 'Cerrar', 'Close'),
       child: Material(
         color: Colors.white,
         shape: const CircleBorder(),
         elevation: 3,
         child: InkWell(
-          onTap: () => _close(context),
+          onTap: onPressed ?? () => _close(context),
           customBorder: const CircleBorder(),
           child: const SizedBox(
             width: 44,
@@ -157,7 +171,7 @@ class LoadingLabel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
-          'Cargando',
+          localizedText(context, 'Cargando', 'Loading'),
           style: TextStyle(
             fontSize: 20 * scale,
             fontWeight: FontWeight.w700,
@@ -351,28 +365,28 @@ class _BookStatusControlsState extends State<BookStatusControls> {
       children: [
         _StatusButton(
           icon: _isFavorite ? Icons.favorite : Icons.favorite_border,
-          label: 'Favorito',
+          label: localizedText(context, 'Favorito', 'Favorite'),
           selected: _isFavorite,
           scale: widget.scale,
           onPressed: _toggleFavorite,
         ),
         _StatusButton(
           icon: Icons.hourglass_top_rounded,
-          label: 'Pendiente',
+          label: localizedText(context, 'Pendiente', 'Pending'),
           selected: _status == BookReadingStatus.pending,
           scale: widget.scale,
           onPressed: () => _selectStatus(BookReadingStatus.pending),
         ),
         _StatusButton(
           icon: Icons.check,
-          label: 'Completado',
+          label: localizedText(context, 'Completado', 'Completed'),
           selected: _status == BookReadingStatus.completed,
           scale: widget.scale,
           onPressed: () => _selectStatus(BookReadingStatus.completed),
         ),
         _StatusButton(
           icon: Icons.book_rounded,
-          label: 'Leyendo',
+          label: localizedText(context, 'Leyendo', 'Reading'),
           selected: _status == BookReadingStatus.reading,
           scale: widget.scale,
           onPressed: () => _selectStatus(BookReadingStatus.reading),

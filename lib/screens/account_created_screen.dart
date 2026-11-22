@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../utils/app_localization.dart';
 import '../utils/platform_layout.dart';
 import '../widgets/booksmart_widgets.dart';
 import 'login_screen.dart';
@@ -80,7 +81,11 @@ class _AccountCreatedScreenState extends State<AccountCreatedScreen> {
                   BookSmartEmblem(size: logoSize),
                   SizedBox(height: 48 * scale),
                   Text(
-                    'Cuenta creada\ncon éxito',
+                    localizedText(
+                      context,
+                      'Cuenta creada\ncon éxito',
+                      'Account created\nsuccessfully',
+                    ),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 28 * scale,

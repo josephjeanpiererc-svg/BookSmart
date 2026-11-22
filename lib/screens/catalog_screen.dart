@@ -1,8 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../data/booksmart_database.dart';
+import '../utils/app_localization.dart';
 import '../utils/platform_layout.dart';
 import '../widgets/booksmart_widgets.dart';
+import '../widgets/book_details_sheet.dart';
+import '../widgets/navigation/app_sidebar.dart';
 import 'home_screen.dart';
 import 'library_screen.dart';
 import 'profile_screen.dart';
@@ -11,6 +17,7 @@ class CatalogScreen extends StatefulWidget {
   const CatalogScreen({
     super.key,
     this.displayName = 'Usuario',
+    this.userId,
     this.paidPlan = false,
     this.initialBookTitle,
   });
@@ -97,6 +104,7 @@ class CatalogScreen extends StatefulWidget {
       case BookReadingStatus.completed:
         completed.add(title);
     }
+    _persistUserLibrary(user);
   }
 
   static void setFavorite(String title, bool isFavorite, [String? user]) {
@@ -106,6 +114,48 @@ class CatalogScreen extends StatefulWidget {
     } else {
       favorites.remove(title);
     }
+    _persistUserLibrary(user);
+  }
+
+  static Future<void> restoreUserLibrary(String user) async {
+    if (!kIsWeb) return;
+    final library = await BooksmartDatabase.instance.loadLibrary(user);
+    _ownedBookTitlesByUser[user] = library.owned;
+    _readingBookTitlesByUser[user] = library.reading;
+    _completedBookTitlesByUser[user] = library.completed;
+    _pendingBookTitlesByUser[user] = library.pending;
+    _favoriteBookTitlesByUser[user] = library.favorites;
+  }
+
+  static Future<void> persistUserLibrary(String user) async {
+    if (!kIsWeb) return;
+    await BooksmartDatabase.instance.saveLibrary(
+      user,
+      BookLibraryData(
+        owned: ownedBookTitlesFor(user),
+        reading: readingBookTitlesFor(user),
+        completed: completedBookTitlesFor(user),
+        pending: pendingBookTitlesFor(user),
+        favorites: favoriteBookTitlesFor(user),
+      ),
+    );
+  }
+
+  static void _persistUserLibrary(String? user) {
+    if (!kIsWeb) return;
+    unawaited(
+      persistUserLibrary(_userKey(user))
+          .catchError((Object error, StackTrace stackTrace) {
+            FlutterError.reportError(
+              FlutterErrorDetails(
+                exception: error,
+                stack: stackTrace,
+                library: 'BookSmart local database',
+                context: ErrorDescription('while saving a user library'),
+              ),
+            );
+          }),
+    );
   }
 
   static (String, String, String, String, String)? detailsForTitle(
@@ -121,6 +171,23 @@ class CatalogScreen extends StatefulWidget {
     }
 
     return book;
+  }
+
+  static String? catalogTitleForHomeBook(String homeTitle) {
+    const titles = {
+      'Anatomía humana': 'Anatomía humana',
+      'Diagnóstico clínico': 'Diagnóstico clínico',
+      'JavaScript': 'JavaScript: The Definitive Guide',
+      'Python': 'Python',
+      'Contabilidad básica': 'Apuntes de contabilidad financiera',
+      'Contabilidad intermedia': 'Contabilidad financiera intermedia',
+      'Refino del petróleo': 'El refino del petróleo',
+      'Inteligencia artificial': 'Artificial Intelligence',
+      'Matemáticas aplicadas':
+          'Matemáticas aplicadas a la ingeniería petrolera',
+      'Programación con C++': 'Object-Oriented Programming with C++',
+    };
+    return titles[homeTitle];
   }
 
   static const List<(String, String, String, String, String)> _bookCatalog = [
@@ -194,6 +261,27 @@ class CatalogScreen extends StatefulWidget {
       '2024',
       'Una introducción clara al lenguaje Python y sus aplicaciones.',
     ),
+    (
+      'Idiomas',
+      'Aprender Inglés para Adultos Principiantes',
+      'Método 8 en 1 para adultos principiantes, de Valeria L. García.',
+      '2024',
+      'Incluye gramática, vocabulario, conversación y más.',
+    ),
+    (
+      'Idiomas',
+      'Inglés para conversar',
+      'Curso práctico de conversación cotidiana para hispanohablantes.',
+      '2024',
+      'Contiene más de 1,500 expresiones y diálogos de la vida real; incluye cursos de pronunciación y ciudadanía estadounidense, además de acceso a una aplicación móvil.',
+    ),
+    (
+      'Idiomas',
+      'Inglés ¡Excelente! Nivel 3',
+      'Libro didáctico e ilustrado de Langenscheidt para enseñar inglés a niños hispanohablantes.',
+      '2007',
+      'Sigue las aventuras de Yuli y Suri, un suricato, mientras aprenden inglés.',
+    ),
   ];
 
   static String imagePathForTitle(String title) {
@@ -214,6 +302,12 @@ class CatalogScreen extends StatefulWidget {
       'Matemáticas aplicadas a la ingeniería petrolera': 'assets/images/ImagenLibro/LibroMatematicasAplicadasalaIngenieriaPetrolera.png',
       'Object-Oriented Programming with C++': 'assets/images/ImagenLibro/LibroObject-OrientedProgrammingWithc++.png',
       'Python': 'assets/images/ImagenLibro/LibroPython.png',
+      'Aprender Inglés para Adultos Principiantes':
+          'assets/images/ImagenLibro/AprenderInglesAdultosPrincipiantes.png',
+      'Inglés para conversar':
+          'assets/images/ImagenLibro/InglesParaConversar.png',
+      'Inglés ¡Excelente! Nivel 3':
+          'assets/images/ImagenLibro/InglesExcelenteNivel3.png',
     };
     return paths[title] ?? 'assets/images/ImagenLibro/LibroPython.png';
   }
@@ -236,6 +330,11 @@ class CatalogScreen extends StatefulWidget {
       'Object-Oriented Programming with C++':
           'assets/PdfLibro/Object_Oriented_Programming_with_Cpp.pdf',
       'Python': 'assets/PdfLibro/Python_The_Complete_Reference.pdf',
+      'Aprender Inglés para Adultos Principiantes':
+          'assets/PdfLibro/Aprender_Ingles_Adultos_Principiantes.pdf',
+      'Inglés para conversar': 'assets/PdfLibro/Ingles_Para_Conversar.pdf',
+      'Inglés ¡Excelente! Nivel 3':
+          'assets/PdfLibro/Ingles_Excelente_Nivel_3.pdf',
     };
     return paths[title] ?? '';
   }
@@ -257,6 +356,11 @@ class CatalogScreen extends StatefulWidget {
       'Object-Oriented Programming with C++':
           'assets/ImagenQR/ObjectOrientedProgrammingCppQR.png',
       'Python': 'assets/ImagenQR/PythonQR.png',
+      'Aprender Inglés para Adultos Principiantes':
+          'assets/ImagenQR/AprenderInglesAdultosPrincipiantesQR.png',
+      'Inglés para conversar': 'assets/ImagenQR/InglesParaConversarQR.png',
+      'Inglés ¡Excelente! Nivel 3':
+          'assets/ImagenQR/InglesExcelenteNivel3QR.png',
     };
     return paths[title] ?? '';
   }
@@ -306,6 +410,7 @@ class CatalogScreen extends StatefulWidget {
   }
 
   final String displayName;
+  final String? userId;
   final bool paidPlan;
   final String? initialBookTitle;
 
@@ -323,12 +428,29 @@ class _CatalogScreenState extends State<CatalogScreen> {
     'Contabilidad',
     'Ingeniería',
     'Tecnología',
+    'Idiomas',
   ];
   final _books = CatalogScreen._bookCatalog;
 
   @override
   void initState() {
     super.initState();
+    if (kIsWeb) {
+      CatalogScreen.restoreUserLibrary(_accountId)
+          .then((_) {
+            if (mounted) setState(() {});
+          })
+          .catchError((Object error, StackTrace stackTrace) {
+            FlutterError.reportError(
+              FlutterErrorDetails(
+                exception: error,
+                stack: stackTrace,
+                library: 'BookSmart local database',
+                context: ErrorDescription('while loading a user library'),
+              ),
+            );
+          });
+    }
     if (widget.initialBookTitle != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -340,38 +462,24 @@ class _CatalogScreenState extends State<CatalogScreen> {
     }
   }
 
+  String get _accountId => widget.userId ?? widget.displayName;
+
+  String _localizedCategory(BuildContext context, String category) {
+    return switch (category) {
+      'Todo' => localizedText(context, 'Todo', 'All'),
+      'Salud' => localizedText(context, 'Salud', 'Health'),
+      'Contabilidad' => localizedText(context, 'Contabilidad', 'Accounting'),
+      'Ingeniería' => localizedText(context, 'Ingeniería', 'Engineering'),
+      'Tecnología' => localizedText(context, 'Tecnología', 'Technology'),
+      'Idiomas' => localizedText(context, 'Idiomas', 'Languages'),
+      _ => category,
+    };
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
-  }
-
-  void _toggleSideMenu(bool open) {
-    if (_sideMenuOpen != open) {
-      setState(() => _sideMenuOpen = open);
-    }
-  }
-
-  void _handleSideMenuDragUpdate(DragUpdateDetails details) {
-    if (!isPhoneLayout(MediaQuery.sizeOf(context).width)) {
-      return;
-    }
-
-    final delta = details.primaryDelta ?? 0;
-    if (delta > 0 && !_sideMenuOpen) {
-      _toggleSideMenu(true);
-    } else if (delta < 0 && _sideMenuOpen) {
-      _toggleSideMenu(false);
-    }
-  }
-
-  void _handleSideMenuDragEnd(DragEndDetails details) {
-    final velocity = details.primaryVelocity ?? 0;
-    if (velocity > 180) {
-      _toggleSideMenu(true);
-    } else if (velocity < -180) {
-      _toggleSideMenu(false);
-    }
   }
 
   List<(String, String, String, String, String)> get _filteredBooks {
@@ -391,7 +499,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
   }
 
   void _addBookToLibrary(String title, {bool fromDetail = false}) {
-    final userKey = widget.displayName;
+    final userKey = _accountId;
     final owned = CatalogScreen.ownedBookTitlesFor(userKey);
     final alreadyOwned = owned.contains(title);
     if (alreadyOwned) {
@@ -408,6 +516,17 @@ class _CatalogScreenState extends State<CatalogScreen> {
         CatalogScreen.setBookStatus(title, BookReadingStatus.reading, userKey);
       }
     });
+    CatalogScreen.persistUserLibrary(userKey)
+        .catchError((Object error, StackTrace stackTrace) {
+          FlutterError.reportError(
+            FlutterErrorDetails(
+              exception: error,
+              stack: stackTrace,
+              library: 'BookSmart local database',
+              context: ErrorDescription('while saving a newly added book'),
+            ),
+          );
+        });
 
     if (fromDetail) {
       Navigator.of(context).pop();
@@ -415,7 +534,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Ya está en tu posesión: $title'),
+        content: Text(
+          '${localizedText(context, 'Ya está en tu posesión:', 'Already in your library:')} $title',
+        ),
         behavior: SnackBarBehavior.fixed,
       ),
     );
@@ -427,165 +548,25 @@ class _CatalogScreenState extends State<CatalogScreen> {
     double scale,
   ) {
     final title = book.$2;
-    final imagePath = CatalogScreen.imagePathForTitle(title);
-
-    showModalBottomSheet(
+    BookDetailsSheet.show(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return Container(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(sheetContext).size.height * 0.9,
-          ),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFF7E7),
-            borderRadius: BorderRadius.vertical(
-              top: Radius.circular(28 * scale),
-            ),
-          ),
-          padding: EdgeInsets.fromLTRB(
-            18 * scale,
-            18 * scale,
-            18 * scale,
-            22 * scale,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 52 * scale,
-                    height: 6 * scale,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFCBD6E5),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                ),
-                SizedBox(height: 16 * scale),
-                SizedBox(
-                  height: 240 * scale,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(18 * scale),
-                    child: BookCoverImage(path: imagePath),
-                  ),
-                ),
-                SizedBox(height: 18 * scale),
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 26 * scale,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF1E2A39),
-                  ),
-                ),
-                SizedBox(height: 10 * scale),
-                BookQrCard(
-                  assetPath: CatalogScreen.qrPathForTitle(title),
-                  title: title,
-                  scale: scale,
-                ),
-                SizedBox(height: 12 * scale),
-                Text(
-                  'Descripción',
-                  style: TextStyle(
-                    fontSize: 13 * scale,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF2B3A4D),
-                  ),
-                ),
-                SizedBox(height: 6 * scale),
-                Text(
-                  book.$3,
-                  style: TextStyle(
-                    fontSize: 15 * scale,
-                    color: const Color(0xFF4C5663),
-                    height: 1.4,
-                  ),
-                ),
-                SizedBox(height: 16 * scale),
-                _DetailInfoRow(
-                  label: 'Fecha de publicación',
-                  value: book.$4,
-                  scale: scale,
-                ),
-                SizedBox(height: 10 * scale),
-                _DetailInfoRow(
-                  label: '¿De qué se trata?',
-                  value: book.$5,
-                  scale: scale,
-                ),
-                SizedBox(height: 18 * scale),
-                BookStatusControls(
-                  scale: scale,
-                  status: CatalogScreen.statusForTitle(
-                    title,
-                    widget.displayName,
-                  ),
-                  isFavorite: CatalogScreen.favoriteBookTitlesFor(
-                    widget.displayName,
-                  ).contains(title),
-                  onStatusChanged: (status) {
-                    setState(
-                      () => CatalogScreen.setBookStatus(
-                        title,
-                        status,
-                        widget.displayName,
-                      ),
-                    );
-                  },
-                  onFavoriteChanged: (isFavorite) {
-                    setState(
-                      () => CatalogScreen.setFavorite(
-                        title,
-                        isFavorite,
-                        widget.displayName,
-                      ),
-                    );
-                  },
-                ),
-                SizedBox(height: 18 * scale),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48 * scale,
-                  child: ElevatedButton(
-                    key: ValueKey('detail_add_button_$title'),
-                    onPressed:
-                        CatalogScreen.ownedBookTitlesFor(widget.displayName)
-                            .contains(title)
-                        ? null
-                        : () => _addBookToLibrary(title, fromDetail: true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          CatalogScreen.ownedBookTitlesFor(widget.displayName)
-                              .contains(title)
-                          ? const Color(0xFFBFBFBF)
-                          : const Color(0xFFF0C94D),
-                      foregroundColor: Colors.black,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14 * scale),
-                      ),
-                    ),
-                    child: Text(
-                      CatalogScreen.ownedBookTitlesFor(widget.displayName)
-                              .contains(title)
-                          ? 'Ya está en tu posesión'
-                          : 'Añadir a la biblioteca',
-                      style: TextStyle(
-                        fontSize: 15 * scale,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+      book: book,
+      imagePath: CatalogScreen.imagePathForTitle(title),
+      qrAssetPath: CatalogScreen.qrPathForTitle(title),
+      scale: scale,
+      status: CatalogScreen.statusForTitle(title, _accountId),
+      isFavorite: CatalogScreen.favoriteBookTitlesFor(_accountId)
+          .contains(title),
+      isOwned: CatalogScreen.ownedBookTitlesFor(_accountId).contains(title),
+      onStatusChanged: (status) {
+        setState(() => CatalogScreen.setBookStatus(title, status, _accountId));
+      },
+      onFavoriteChanged: (isFavorite) {
+        setState(
+          () => CatalogScreen.setFavorite(title, isFavorite, _accountId),
         );
       },
+      onAddToLibrary: () => _addBookToLibrary(title, fromDetail: true),
     );
   }
 
@@ -606,13 +587,14 @@ class _CatalogScreenState extends State<CatalogScreen> {
           final scale = useFullScreen
               ? (width / 600).clamp(0.82, 1.0)
               : (frameWidth / 375).clamp(0.68, 1.1);
-          final phoneRailOpenWidth = 112.0 * scale;
-          final phoneRailClosedWidth = 58.0 * scale;
-          final contentPaddingLeft = isPhone
-              ? (12 * scale) +
-                    (_sideMenuOpen ? phoneRailOpenWidth : phoneRailClosedWidth)
-              : (12 * scale) + (_sideMenuOpen ? 108 * scale : 42 * scale);
-          final menuWidth = isPhone ? phoneRailOpenWidth : 112.0 * scale;
+          final sidebarScale = AppSidebar.scaleFor(width);
+          final contentPaddingLeft =
+              12 * scale +
+              AppSidebar.widthFor(
+                scale: sidebarScale,
+                isPhone: isPhone,
+                isOpen: _sideMenuOpen,
+              );
           final compactGridCount = isPhone ? 2 : 3;
 
           return Center(
@@ -657,7 +639,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
                                       controller: _searchController,
                                       onChanged: (_) => setState(() {}),
                                       decoration: InputDecoration(
-                                        hintText: 'Buscar',
+                                        hintText: localizedText(
+                                          context,
+                                          'Buscar',
+                                          'Search',
+                                        ),
                                         hintStyle: TextStyle(
                                           color: Colors.white,
                                           fontSize: 20 * scale,
@@ -717,7 +703,12 @@ class _CatalogScreenState extends State<CatalogScreen> {
                                   children: List.generate(
                                     _categories.length,
                                     (index) => ChoiceChip(
-                                      label: Text(_categories[index]),
+                                      label: Text(
+                                        _localizedCategory(
+                                          context,
+                                          _categories[index],
+                                        ),
+                                      ),
                                       selected: _selectedCategory == index,
                                       onSelected: (_) => setState(
                                         () => _selectedCategory = index,
@@ -773,7 +764,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                                     onTap: () =>
                                         _openBookDetail(context, book, scale),
                                     isOwned: CatalogScreen.ownedBookTitlesFor(
-                                      widget.displayName,
+                                      _accountId,
                                     ).contains(book.$2),
                                     displayName: widget.displayName,
                                   );
@@ -787,125 +778,42 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   ),
                   Positioned(
                     left: 0,
-                    top: 70 * scale,
-                    bottom: 64 * scale,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onHorizontalDragUpdate: isPhone
-                          ? _handleSideMenuDragUpdate
-                          : null,
-                      onHorizontalDragEnd: isPhone
-                          ? _handleSideMenuDragEnd
-                          : null,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 220),
-                        width: isPhone
-                            ? (_sideMenuOpen
-                                  ? phoneRailOpenWidth
-                                  : phoneRailClosedWidth)
-                            : (_sideMenuOpen ? menuWidth : 54 * scale),
-                        padding: EdgeInsets.fromLTRB(
-                          8 * scale,
-                          12 * scale,
-                          8 * scale,
-                          12 * scale,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFDCC9AA),
-                          border: Border.all(
-                            color: const Color(0xFF2F6C9A),
-                            width: 3 * scale,
+                    top: 70 * sidebarScale,
+                    bottom: 64 * sidebarScale,
+                    child: AppSidebar(
+                      scale: sidebarScale,
+                      isPhone: isPhone,
+                      isOpen: _sideMenuOpen,
+                      selectedIndex: 1,
+                      onOpenChanged: (open) =>
+                          setState(() => _sideMenuOpen = open),
+                      onDestinationSelected: (index) {
+                        if (index == 1) {
+                          setState(() => _sideMenuOpen = true);
+                          return;
+                        }
+                        final screen = switch (index) {
+                          0 => HomeScreen(
+                            displayName: widget.displayName,
+                            userId: _accountId,
+                            paidPlan: widget.paidPlan,
                           ),
-                          borderRadius: BorderRadius.only(
-                            topRight: Radius.circular(18 * scale),
-                            bottomRight: Radius.circular(18 * scale),
+                          2 => LibraryScreen(
+                            displayName: widget.displayName,
+                            userId: _accountId,
                           ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            if (_sideMenuOpen) ...[
-                              _SideMenuItem(
-                                icon: Icons.home,
-                                label: 'Inicio',
-                                selected: false,
-                                scale: scale,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) => HomeScreen(
-                                        displayName: widget.displayName,
-                                        paidPlan: widget.paidPlan,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                              SizedBox(height: 14 * scale),
-                              _SideMenuItem(
-                                icon: Icons.business_center,
-                                label: 'Catalogo',
-                                selected: true,
-                                scale: scale,
-                                onTap: () =>
-                                    setState(() => _sideMenuOpen = true),
-                              ),
-                              SizedBox(height: 14 * scale),
-                              _SideMenuItem(
-                                icon: Icons.menu_book,
-                                label: 'Mi Biblioteca',
-                                selected: false,
-                                scale: scale,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) => LibraryScreen(
-                                        displayName: widget.displayName,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                              SizedBox(height: 14 * scale),
-                              _SideMenuItem(
-                                icon: Icons.person,
-                                label: 'Perfil',
-                                selected: false,
-                                scale: scale,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) => ProfileScreen(
-                                        displayName: widget.displayName,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
-                            Expanded(
-                              child: Center(
-                                child: IconButton(
-                                  onPressed: () => setState(
-                                    () => _sideMenuOpen = !_sideMenuOpen,
-                                  ),
-                                  icon: Icon(
-                                    _sideMenuOpen
-                                        ? Icons.chevron_left
-                                        : Icons.menu,
-                                    color: const Color(0xFF28639B),
-                                    size: 30 * scale,
-                                  ),
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: const Color(0xFFEFE4CF),
-                                    shape: const CircleBorder(),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                          3 => ProfileScreen(
+                            displayName: widget.displayName,
+                            userId: _accountId,
+                          ),
+                          _ => null,
+                        };
+                        if (screen != null) {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(builder: (_) => screen),
+                          );
+                        }
+                      },
                     ),
                   ),
                 ],
@@ -1010,8 +918,16 @@ class _CatalogBookCard extends StatelessWidget {
                     ),
                     child: Text(
                       isOwned
-                          ? 'Ya está en tu posesión'
-                          : 'Añadir a la biblioteca',
+                          ? localizedText(
+                              context,
+                              'Ya está en tu posesión',
+                              'Already in your library',
+                            )
+                          : localizedText(
+                              context,
+                              'Añadir a la biblioteca',
+                              'Add to library',
+                            ),
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 12 * scale,
@@ -1046,97 +962,6 @@ class _CatalogBookCard extends StatelessWidget {
                   ),
                 ),
               ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DetailInfoRow extends StatelessWidget {
-  const _DetailInfoRow({
-    required this.label,
-    required this.value,
-    required this.scale,
-  });
-
-  final String label;
-  final String value;
-  final double scale;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 13 * scale,
-            fontWeight: FontWeight.w700,
-            color: const Color(0xFF2B3A4D),
-          ),
-        ),
-        SizedBox(height: 4 * scale),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 14 * scale,
-            color: const Color(0xFF495A6D),
-            height: 1.5,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SideMenuItem extends StatelessWidget {
-  const _SideMenuItem({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.scale,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final double scale;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16 * scale),
-      child: Container(
-        width: double.infinity,
-        padding: EdgeInsets.symmetric(vertical: 8 * scale),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFF5D7E9E) : Colors.transparent,
-          borderRadius: BorderRadius.circular(16 * scale),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              color: selected ? Colors.white : const Color(0xFF28639B),
-              size: 28 * scale,
-            ),
-            SizedBox(height: 4 * scale),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: selected ? Colors.white : const Color(0xFF1E2A39),
-                fontSize: 11 * scale,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
           ],
         ),
       ),

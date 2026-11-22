@@ -1,12 +1,23 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../data/booksmart_database.dart';
+import '../utils/app_localization.dart';
 import '../utils/platform_layout.dart';
 import '../widgets/booksmart_widgets.dart';
 import 'account_created_screen.dart';
 
 class EmailVerificationScreen extends StatefulWidget {
-  const EmailVerificationScreen({super.key});
+  const EmailVerificationScreen({
+    super.key,
+    this.displayName,
+    this.username,
+    this.password,
+  });
+
+  final String? displayName;
+  final String? username;
+  final String? password;
 
   @override
   State<EmailVerificationScreen> createState() =>
@@ -44,22 +55,70 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
       _formKey.currentState?.validate();
       return;
     }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Código enviado a tu correo')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          localizedText(
+            context,
+            kIsWeb
+                ? 'El envío de correo no está conectado; esta verificación es de demostración.'
+                : 'Código enviado a tu correo',
+            kIsWeb
+                ? 'Email delivery is not connected; this is a demo verification.'
+                : 'Code sent to your email',
+          ),
+        ),
+      ),
+    );
   }
 
-  void _verifyEmail() {
+  Future<void> _verifyEmail() async {
     final hasCode = _codeControllers.every(
       (controller) => controller.text.trim().isNotEmpty,
     );
     if (_formKey.currentState!.validate() && hasCode) {
+      if (kIsWeb &&
+          widget.displayName != null &&
+          widget.username != null &&
+          widget.password != null) {
+        try {
+          await BooksmartDatabase.instance.createPasswordAccount(
+            displayName: widget.displayName!,
+            username: widget.username!,
+            email: _emailController.text.trim(),
+            password: widget.password!,
+          );
+        } on UsernameAlreadyExistsException {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                localizedText(
+                  context,
+                  'Ese usuario ya existe. Elige otro.',
+                  'That username already exists. Choose another.',
+                ),
+              ),
+            ),
+          );
+          return;
+        }
+      }
+      if (!mounted) return;
       Navigator.of(context).push(
         MaterialPageRoute<void>(builder: (_) => const AccountCreatedScreen()),
       );
     } else if (!hasCode) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Escribe los 6 dígitos del código')),
+        SnackBar(
+          content: Text(
+            localizedText(
+              context,
+              'Escribe los 6 dígitos del código',
+              'Enter the 6-digit code',
+            ),
+          ),
+        ),
       );
     }
   }
@@ -117,7 +176,11 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                         SizedBox(height: 14 * scale),
                         Center(
                           child: Text(
-                            'Verificación de correo',
+                            localizedText(
+                              context,
+                              'Verificación de correo',
+                              'Email verification',
+                            ),
                             style: TextStyle(
                               fontSize: 23 * scale,
                               fontWeight: FontWeight.w700,
@@ -131,7 +194,10 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                           scale: scale,
                         ),
                         SizedBox(height: 28 * scale),
-                        FieldLabel(text: 'Correo:', scale: scale),
+                        FieldLabel(
+                          text: localizedText(context, 'Correo:', 'Email:'),
+                          scale: scale,
+                        ),
                         SizedBox(height: 6 * scale),
                         LoginField(
                           controller: _emailController,
@@ -139,10 +205,18 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                           keyboardType: TextInputType.emailAddress,
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
-                              return 'Escribe tu correo';
+                              return localizedText(
+                                context,
+                                'Escribe tu correo',
+                                'Enter your email',
+                              );
                             }
                             if (!value.contains('@')) {
-                              return 'Escribe un correo válido';
+                              return localizedText(
+                                context,
+                                'Escribe un correo válido',
+                                'Enter a valid email',
+                              );
                             }
                             return null;
                           },
@@ -150,7 +224,11 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                         SizedBox(height: 18 * scale),
                         Center(
                           child: ActionButton(
-                            label: 'Obtener Código',
+                            label: localizedText(
+                              context,
+                              'Obtener Código',
+                              'Get code',
+                            ),
                             scale: scale,
                             onPressed: _getCode,
                           ),
@@ -166,7 +244,11 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                         SizedBox(height: 10 * scale),
                         Center(
                           child: ActionButton(
-                            label: 'Verificar correo',
+                            label: localizedText(
+                              context,
+                              'Verificar correo',
+                              'Verify email',
+                            ),
                             scale: scale,
                             onPressed: _verifyEmail,
                           ),

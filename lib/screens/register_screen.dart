@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../utils/app_localization.dart';
 import '../utils/platform_layout.dart';
 import '../widgets/booksmart_widgets.dart';
 import 'email_verification_screen.dart';
@@ -32,14 +33,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (_formKey.currentState!.validate()) {
       Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => const EmailVerificationScreen(),
+          builder: (_) => EmailVerificationScreen(
+            displayName: _nameController.text.trim(),
+            username: _usernameController.text.trim(),
+            password: _passwordController.text,
+          ),
         ),
       );
     }
   }
 
   String? _requiredValue(String? value, String label) {
-    return value == null || value.trim().isEmpty ? 'Escribe tu $label' : null;
+    if (value != null && value.trim().isNotEmpty) {
+      return null;
+    }
+    final englishLabel = switch (label) {
+      'nombre' => 'name',
+      'usuario' => 'username',
+      'contraseña' => 'password',
+      _ => label,
+    };
+    return localizedText(
+      context,
+      'Escribe tu $label',
+      'Enter your $englishLabel',
+    );
   }
 
   @override
@@ -94,14 +112,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         Center(child: BookSmartEmblem(size: logoSize)),
                         SizedBox(height: 18 * scale),
                         Text(
-                          'Crear una Nueva Cuenta:',
+                          localizedText(
+                            context,
+                            'Crear una Nueva Cuenta:',
+                            'Create a new account:',
+                          ),
                           style: TextStyle(
                             fontSize: 23 * scale,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                         SizedBox(height: 14 * scale),
-                        FieldLabel(text: 'Nombre:', scale: scale),
+                        FieldLabel(
+                          text: localizedText(context, 'Nombre:', 'Name:'),
+                          scale: scale,
+                        ),
                         SizedBox(height: 6 * scale),
                         LoginField(
                           controller: _nameController,
@@ -109,7 +134,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           validator: (value) => _requiredValue(value, 'nombre'),
                         ),
                         SizedBox(height: 12 * scale),
-                        FieldLabel(text: 'Usuario:', scale: scale),
+                        FieldLabel(
+                          text: localizedText(context, 'Usuario:', 'Username:'),
+                          scale: scale,
+                        ),
                         SizedBox(height: 6 * scale),
                         LoginField(
                           controller: _usernameController,
@@ -118,7 +146,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               _requiredValue(value, 'usuario'),
                         ),
                         SizedBox(height: 12 * scale),
-                        FieldLabel(text: 'Contraseña:', scale: scale),
+                        FieldLabel(
+                          text: localizedText(
+                            context,
+                            'Contraseña:',
+                            'Password:',
+                          ),
+                          scale: scale,
+                        ),
                         SizedBox(height: 6 * scale),
                         LoginField(
                           controller: _passwordController,
@@ -128,7 +163,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               _requiredValue(value, 'contraseña'),
                         ),
                         SizedBox(height: 12 * scale),
-                        FieldLabel(text: 'Confirma Contraseña:', scale: scale),
+                        FieldLabel(
+                          text: localizedText(
+                            context,
+                            'Confirma Contraseña:',
+                            'Confirm password:',
+                          ),
+                          scale: scale,
+                        ),
                         SizedBox(height: 6 * scale),
                         LoginField(
                           controller: _confirmationController,
@@ -142,7 +184,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             if (requiredError != null) return requiredError;
                             return value == _passwordController.text
                                 ? null
-                                : 'Las contraseñas no coinciden';
+                                : localizedText(
+                                    context,
+                                    'Las contraseñas no coinciden',
+                                    'Passwords do not match',
+                                  );
                           },
                         ),
                         SizedBox(height: 16 * scale),
@@ -163,7 +209,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 ),
                               ),
                               child: Text(
-                                'Continua...',
+                                localizedText(
+                                  context,
+                                  'Continua...',
+                                  'Continue...',
+                                ),
                                 style: TextStyle(
                                   fontSize: 20 * scale,
                                   fontWeight: FontWeight.w700,
@@ -178,7 +228,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             onPressed: () => Navigator.of(context).pop(),
                             child: Text.rich(
                               TextSpan(
-                                text: 'Volver a la parte de ',
+                                text: localizedText(
+                                  context,
+                                  'Volver a la parte de ',
+                                  'Return to ',
+                                ),
                                 style: TextStyle(
                                   color: Colors.black,
                                   fontSize: 14 * scale,
@@ -186,7 +240,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 ),
                                 children: [
                                   TextSpan(
-                                    text: 'Inicio Sesión.',
+                                    text: localizedText(
+                                      context,
+                                      'Inicio Sesión.',
+                                      'sign in.',
+                                    ),
                                     style: TextStyle(
                                       color: const Color(0xFF00A7F4),
                                       fontSize: 14 * scale,

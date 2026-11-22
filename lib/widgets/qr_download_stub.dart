@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../utils/app_localization.dart';
+
 class QrDownloadButton extends StatelessWidget {
   const QrDownloadButton({
     required this.assetPath,
@@ -15,12 +17,18 @@ class QrDownloadButton extends StatelessWidget {
     return IconButton(
       onPressed: () {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Descarga disponible en la versión web.'),
+          SnackBar(
+            content: Text(
+              localizedText(
+                context,
+                'Descarga disponible en la versión web.',
+                'QR downloads are available on the web version.',
+              ),
+            ),
           ),
         );
       },
-      tooltip: 'Descargar QR',
+      tooltip: localizedText(context, 'Descargar QR', 'Download QR code'),
       icon: const Icon(Icons.download),
     );
   }

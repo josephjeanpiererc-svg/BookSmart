@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'utils/app_localization.dart';
+import 'widgets/language_toggle_button.dart';
 export 'screens/account_created_screen.dart';
 export 'screens/email_verification_screen.dart';
 export 'screens/home_screen.dart';
@@ -26,13 +30,54 @@ Future<void> main() async {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  Locale _locale = const Locale('es');
+  bool _isLanguageLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreLanguage();
+  }
+
+  Future<void> _restoreLanguage() async {
+    final preferences = await SharedPreferences.getInstance();
+    final languageCode = preferences.getString('app_language');
+    if (!mounted) {
+      return;
+    }
+    final restoredLocale = switch (languageCode) {
+      'es' => const Locale('es'),
+      'en' => const Locale('en'),
+      _ => _locale,
+    };
+    setState(() {
+      _locale = restoredLocale;
+      _isLanguageLoaded = true;
+    });
+  }
+
+  Future<void> _toggleLanguage() async {
+    final languageCode = _locale.languageCode == 'es' ? 'en' : 'es';
+    setState(() => _locale = Locale(languageCode));
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString('app_language', languageCode);
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'BookSmart',
+      locale: _locale,
+      supportedLocales: const [Locale('es'), Locale('en')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       debugShowCheckedModeBanner: false,
       initialRoute: '/loading',
       theme: ThemeData(
@@ -75,6 +120,24 @@ class MyApp extends StatelessWidget {
         '/login': (_) => const LoginScreen(),
       },
       home: const LoadingScreen(),
+      builder: (context, child) => AppLanguageScope(
+        locale: _locale,
+        child: Stack(
+          children: [
+            ?child,
+            Positioned(
+              top: 8,
+              right: 12,
+              child: SafeArea(
+                child: LanguageToggleButton(
+                  locale: _locale,
+                  onPressed: _isLanguageLoaded ? _toggleLanguage : null,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
